@@ -1,0 +1,19 @@
+[project]
+name = "campus_multiplataforma_llm"
+version = "0.1.1"
+description = "Campus Multiplataforma LLM"
+readme = "README.md"
+authors = [{ name = "Lucas Zawacki", email = "lfzawacki@gmail.com" }]
+requires-python = ">=3.13"
+dependencies = [
+    "altair>=6.0.0",
+    "pandas>=2.3.3",
+    "streamlit>=1.54.0",
+]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = ["coverage>=7.13.0", "pytest>=9.0.2", "pytest-cov>=7.0.0", "ruff>=0.14.9"]

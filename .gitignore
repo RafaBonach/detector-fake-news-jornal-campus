@@ -1,0 +1,26 @@
+# Environment variables
+.env
+
+# Python virtual environment
+venv/
+*/venv/
+.venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Database file
+meridian.db
+*.sqlite
+*.sqlite3
+
+# OS generated files
+.DS_Store
+Thumbs.db
+.aider*
+
+src/meridiano.egg-info/
+
+.coverage
