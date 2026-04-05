@@ -1,8 +1,8 @@
 ---
-title: Meridiano
-emoji: 🚀
+title: Campus Multiplataforma LLM
+emoji: 💻
 colorFrom: red
-colorTo: red
+colorTo: purple
 sdk: docker
 app_port: 8501
 tags:
