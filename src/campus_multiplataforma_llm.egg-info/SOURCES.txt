@@ -1,8 +1,0 @@
-README.md
-pyproject.toml
-src/streamlit_app.py
-src/campus_multiplataforma_llm.egg-info/PKG-INFO
-src/campus_multiplataforma_llm.egg-info/SOURCES.txt
-src/campus_multiplataforma_llm.egg-info/dependency_links.txt
-src/campus_multiplataforma_llm.egg-info/requires.txt
-src/campus_multiplataforma_llm.egg-info/top_level.txt

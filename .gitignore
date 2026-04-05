@@ -21,6 +21,6 @@ meridian.db
 Thumbs.db
 .aider*
 
-src/meridiano.egg-info/
+src/campus_multiplataforma_llm.egg-info/
 
 .coverage
