@@ -7,7 +7,7 @@ else
     export $(shell sed 's/=.*//' .env.example)
 endif
 
-COMPOSE_COMMAND= docker compose --env-file .env -f docker/compose.yml
+COMPOSE_COMMAND= docker compose --env-file .env -f compose.yml
 PYTHON_COMMAND= docker run --rm --network host --env-file .env -e PYTHONPATH=/app/src -e docker-web:latest .venv/bin/python
 
 up:
