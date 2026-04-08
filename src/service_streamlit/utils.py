@@ -1,4 +1,4 @@
-from src.config_base import PROMPTS
+from config_base import PROMPTS
 
 def select_prompt(prompt_typ: str | None = None, prompt_def: str | None = None) -> str:
     """Informe qual será a base do prompt"""
