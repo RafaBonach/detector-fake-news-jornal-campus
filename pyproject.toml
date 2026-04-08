@@ -7,8 +7,10 @@ authors = [{ name = "Lucas Zawacki", email = "lfzawacki@gmail.com" }]
 requires-python = ">=3.13"
 dependencies = [
     "altair>=6.0.0",
+    "dotenv>=0.9.9",
     "pandas>=2.3.3",
     "streamlit>=1.54.0",
+    "torch>=2.11.0",
 ]
 
 [build-system]
