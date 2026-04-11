@@ -35,8 +35,9 @@ MODELS = {
 
 PROMPTS = {
     "base":{
-        "zero-shot": """Classify the following statement as 'False ' or 'True ':
-        \n Message : {question}.\n Return only the Classification in a single word ( true / false ) 
-        without any further explanation :"""
+        "zero-shot": """You are a binary misinformation classifier. 
+        Classify the following statement as 'False ' or 'True':
+        \n Message : {question}.\n 
+        Return without any further explanation exactly one lowercase token: true or false."""
     }
 }
