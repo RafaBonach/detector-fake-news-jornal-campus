@@ -1,4 +1,18 @@
+pt_br = " A resposta deve ser gerada exclusivamente em português brasileiro."
+think = " /think"
+no_think = " /no_think"
 MODELS = {
+    'qwen3-0.6b': {
+        'model_id': '"Qwen/Qwen3-0.6B"',
+        'api_key': 'EMPTY',
+        'enable_thinking': True,
+        'max_new_tokens': 32768,
+        'do_sample': False,
+        'temperature': 0.6,
+        'top_p': 0.95,
+        'top_k': 20,
+        'min_p': 0,
+    },
     'gemma -2b': {
         'model_id ': 'google /gemma-2b',
         'model_name ': 'Gemma-2B-Instruct ',
@@ -33,11 +47,19 @@ MODELS = {
     }
 }
 
+
 PROMPTS = {
     "base":{
-        "zero-shot": """You are a binary misinformation classifier. 
-        Classify the following statement as 'False ' or 'True':
-        \n Message : {question}.\n 
-        Return without any further explanation exactly one lowercase token: true or false."""
-    }
+        "campusito": "Você é um classificador binário de desinformação. "
+        "Classifique a seguinte afirmação como 'Falsa' ou 'Verdadeira':"
+        "\n\nMensagem : {question}.\n\n"
+        "Retorne, destacando, se a afirmação é verdadeira ou falsa. "
+        "Elabore uma breve justificativa para a classificação, explicando os motivos pelos quais a afirmação é verdadeira ou falsa." + pt_br + think,
+
+        "zero-shot": "You are a binary misinformation classifier. "
+        "Classify the following statement as 'False ' or 'True':"
+        "\n\nMensagem : {question}.\n\n"
+        "Return without any further explanation exactly one lowercase token: true or false." + pt_br,
+    },
+    "definition": ""
 }
