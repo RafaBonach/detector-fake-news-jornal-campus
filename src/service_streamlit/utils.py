@@ -14,7 +14,7 @@ def select_prompt(prompt_cat= None | str, prompt_typ= None | str) -> str:
     
     result_prompt = ""
     
-    if prompt_cat is 'D' or prompt_cat is 'd':
+    if prompt_cat == 'D' or prompt_cat == 'd':
         result_prompt = "\n\n"+ PROMPTS["definition"]
 
     if prompt_typ is not None and prompt_typ in PROMPTS["base"]:
