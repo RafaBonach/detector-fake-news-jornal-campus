@@ -3,6 +3,13 @@ from service_streamlit.llm import LLMService
 
 def show():
     st.header("💬 Chatbot")
+    st.markdown(
+        '<p style="font-size: 1.1rem; line-height: 1.6;">'
+        'O que achou do resultado da IA? Aconteceu algum erro? Acha que a IA classificou de forma errada?<br>'
+        '<a href="https://forms.gle/jygcee81PYFpYa8UA" target="_blank">Deixe seu feedback aqui</a>.'
+        '</p>',
+        unsafe_allow_html=True,
+    )
 
     if 'llm_service' not in st.session_state:
         st.session_state.llm_service = LLMService(model_name="Qwen/Qwen3-0.6B")
