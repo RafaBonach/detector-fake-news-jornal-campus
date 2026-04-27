@@ -1,4 +1,4 @@
-pt_br = " A resposta deve ser gerada exclusivamente em português brasileiro."
+pt_br = " Responda exclusivamente em português brasileiro. Nunca responda em inglês."
 think = " /think"
 no_think = " /no_think"
 MODELS = {
@@ -51,15 +51,21 @@ MODELS = {
 PROMPTS = {
     "base":{
         "campusito": "Você é um classificador binário de desinformação. "
+        "Classifique a seguinte afirmação como 'Falsa' ou 'Verdadeira'." + pt_br + ":"
+        "\n\nMensagem : {question}.\n\n"
+        "Retorne no formato abaixo:\n"
+        "Classificação: FALSA ou VERDADEIRA\n"
+        "Justificativa: no máximo 2 frases curtas.\n\n"
+        "Regras obrigatórias:\n"
+        "1) Não invente fatos, cargos, datas, números ou nomes.\n"
+        "2) Não adicione detalhes que não sejam estritamente necessários para justificar a classificação.\n"
+        "3) Se não tiver confiança em um detalhe, diga explicitamente: 'Não tenho evidência suficiente para esse detalhe'.\n"
+        "4) Não use linguagem especulativa.",
+
+        "zero-shot": "Você é um classificador binário de desinformação. "
         "Classifique a seguinte afirmação como 'Falsa' ou 'Verdadeira':"
         "\n\nMensagem : {question}.\n\n"
-        "Retorne, destacando, se a afirmação é verdadeira ou falsa. "
-        "Elabore uma breve justificativa para a classificação, explicando os motivos pelos quais a afirmação é verdadeira ou falsa." + pt_br + think,
-
-        "zero-shot": "You are a binary misinformation classifier. "
-        "Classify the following statement as 'False ' or 'True':"
-        "\n\nMensagem : {question}.\n\n"
-        "Return without any further explanation exactly one lowercase token: true or false." + pt_br,
+        "Retorne sem explicação adicional exatamente uma palavra: falsa ou verdadeira." + pt_br,
     },
     "definition": ""
 }
