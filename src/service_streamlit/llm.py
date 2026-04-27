@@ -1,5 +1,6 @@
 # bibliotecas de sistema
 import os
+import re
 import torch
 
 from service_streamlit.utils import select_prompt, remove_think, normalize_boolean_answer
@@ -22,8 +23,19 @@ class LLMService:
     
 
 
-    def call_llm(self, prompt):
-        messages = [{"role": "user", "content": prompt}]
+    def call_llm(self, prompt, force_portuguese=False):
+        system_content = (
+            "Você é um assistente de checagem de fatos. "
+            "Responda exclusivamente em português brasileiro. "
+            "Nunca responda em inglês."
+        )
+        if force_portuguese:
+            system_content += " Reescreva todo o conteúdo final em português brasileiro natural."
+
+        messages = [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": prompt},
+        ]
 
         text = self.tokenizer.apply_chat_template(
             messages,
@@ -35,10 +47,7 @@ class LLMService:
         generated_ids = self.model.generate(
             **model_input,
             max_new_tokens=32768,
-            temperature=0.6,
-            top_p=0.95,
-            top_k=20,
-            min_p=0,
+            do_sample=False,
             repetition_penalty=1.15,         # reduz invenções por repetição
             no_repeat_ngram_size=4,          # evita loops/frases recicladas
             eos_token_id=self.tokenizer.eos_token_id,
@@ -55,6 +64,18 @@ class LLMService:
 
         # Normaliza a resposta para garantir que seja estritamente "true" ou "false"
         # return normalize_boolean_answer(raw_answer)
+
+    def _seems_not_portuguese(self, text: str) -> bool:
+        text_lower = text.lower()
+        english_hits = re.findall(
+            r"\b(the|and|is|are|was|were|this|that|with|for|from|false|true|news|hoax|claim)\b",
+            text_lower,
+        )
+        portuguese_hits = re.findall(
+            r"\b(o|a|os|as|é|são|foi|foram|com|para|de|em|não|falso|verdadeiro|boato|afirmação)\b",
+            text_lower,
+        )
+        return len(english_hits) > len(portuguese_hits) + 2
     
 
 
@@ -81,6 +102,14 @@ class LLMService:
         )
 
         answer = self.call_llm(prompt)
+
+        if answer and self._seems_not_portuguese(answer):
+            rewrite_prompt = (
+                "Reescreva o texto abaixo em português brasileiro, mantendo exatamente o mesmo significado, "
+                "sem adicionar fatos novos:\n\n"
+                f"{answer}"
+            )
+            answer = self.call_llm(rewrite_prompt, force_portuguese=True)
 
         if not answer:
             print("Nenhuma resposta encontrada para a pergunta.")
