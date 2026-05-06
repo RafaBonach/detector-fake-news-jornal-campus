@@ -6,6 +6,13 @@ import torch
 from service_streamlit.utils import select_prompt, remove_think, normalize_boolean_answer
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from groq import Groq
+
+from google import genai
+
+from huggingface_hub import InferenceClient as InfClient
+
+from langchain_openrouter import ChatOpenRouter
 
 class LLMService:
     def __init__(self, model_name):
@@ -20,8 +27,63 @@ class LLMService:
             torch_dtype="auto",
             device_map="auto",
         )
-    
 
+        self.gclient = genai.Client(
+            api_key=os.getenv("GOOGLE_API_KEY"),
+        )
+
+        self.groq_client = Groq(
+            api_key=os.getenv("GROQ_API_KEY"),
+        )
+
+        self.hf_client = InfClient(
+            api_key=os.getenv("HUGGINGFACE_API_KEY"),
+        )
+
+        self.openrouter_client = ChatOpenRouter(
+            model="openai/gpt-oss-120b:free",
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            temperature=0.8,
+        )
+
+    def get_model_name(self):
+        return self.model_name
+
+    def call_gemini(self, prompt):
+        response = self.gclient.models.generate_content(
+            model="gemini-3.1-flash-lite-preview",
+            contents=prompt
+        )
+        return response.text
+
+    def call_groq(self, prompt):
+        response = self.groq_client.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": prompt,  
+                }
+            ],
+            model="llama-3.3-70b-versatile",
+        )
+
+        return response.choices[0].message.content.strip()
+
+    def call_huggingface(self, prompt):
+        response = self.hf_client.chat.completions.create(
+            model="katanemo/Arch-Router-1.5B:hf-inference",
+            messages=[
+                {
+                    "role": "system",
+                    "content": prompt,
+                }
+            ]
+        )
+        return response.choices[0].message.content.strip()
+    
+    def call_openrouter(self, prompt):
+        response = self.openrouter_client.invoke(prompt)
+        return response.content.strip()
 
     def call_llm(self, prompt, force_portuguese=False):
         system_content = (
@@ -78,7 +140,6 @@ class LLMService:
         return len(english_hits) > len(portuguese_hits) + 2
     
 
-
     def classify_by_logits(self, prompt: str) -> str:
         messages = [{"role": "user", "content": prompt}]
         text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
@@ -101,6 +162,21 @@ class LLMService:
             question = user_question
         )
 
+        answer = self.call_openrouter(prompt)
+
+        """ Usando modelo com Huggingface
+        answer = self.call_huggingface(prompt)
+        """
+
+        """ Usando modelo Groq puro
+        answer = self.call_groq(prompt)
+        """
+
+        """ Usando modelo Gemini
+        answer = self.call_gemini(prompt)
+        """
+
+        """ Usando modelo com transformer
         answer = self.call_llm(prompt)
 
         if answer and self._seems_not_portuguese(answer):
@@ -110,6 +186,7 @@ class LLMService:
                 f"{answer}"
             )
             answer = self.call_llm(rewrite_prompt, force_portuguese=True)
+        """
 
         if not answer:
             print("Nenhuma resposta encontrada para a pergunta.")
