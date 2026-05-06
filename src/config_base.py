@@ -2,51 +2,42 @@ pt_br = " Responda exclusivamente em português brasileiro. Nunca responda em in
 think = " /think"
 no_think = " /no_think"
 MODELS = {
-    'qwen3-0.6b': {
-        'model_id': '"Qwen/Qwen3-0.6B"',
-        'api_key': 'EMPTY',
-        'enable_thinking': True,
-        'max_new_tokens': 32768,
-        'do_sample': False,
-        'temperature': 0.6,
-        'top_p': 0.95,
-        'top_k': 20,
-        'min_p': 0,
-    },
-    'gemma -2b': {
-        'model_id ': 'google /gemma-2b',
-        'model_name ': 'Gemma-2B-Instruct ',
-        'model_family ': 'gemma',
-        'endpoint_name ': 'jumpstart-dft-hf-llm-gemma-7b-instr-20241103-193822 ',
-        'new ': True ,
-        'tuned_for ': None
-    },
-    "gemma-7b": {
-        "model_id": "google /gemma-7b",
-        "model_name": "Gemma-7B-Instruct ",
-        "model_family": "gemma",
-        "endpoint_name": 'jumpstart-dft-hf-llm-gemma-7b-instr-20241116-155953 ',
-        "new": True ,
-        "tuned_for": None
-    },
-    "llama-3-1-70b": {
-        "model_id": "meta-llama/Meta-Llama-3-70B-Instruct ",
-        "model_name": "Llama-3-1-70B-Instruct ",
-        "model_family": "llama3 ",
-        "endpoint_name": "jumpstart-dft-llama-3-1-70b-instruct-20241225-133356 ",
-        "new": True ,
-        'max_tokens': 7000,
-    },
-    "deep-seek-32B": {
-        "model_id": "deepseek-coder/deepseek-coder-32b",
-        "model_name": "deep-seek-32B",
-        "model_family": "deepseek",
-        "endpoint_name": "jumpstart-dft-deepseek-llm-r1-disti-20250503-175058",
-        "new": True ,
-        'max_tokens': 1024
+    "groq": {
+        "vanilla": [
+            'allam-2-7b',
+            "groq/compound",
+            "groq/compound-mini",
+            "llama-3.1-8b-instant",
+            "meta-llama/llama-4-scout-17b-16e-instruct",
+            "meta-llama/llama-prompt-guard-2-22m",
+            "meta-llama/llama-prompt-guard-2-86m",
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "openai/gpt-oss-safeguard-20b",
+            "qwen/qwen3-32b",
+        ],
+        "huggingface": [
+            "openai/gpt-oss-20b:groq",
+            "openai/gpt-oss-safeguard-20b:groq",
+            "openai/gpt-oss-120b:groq",
+            "Qwen/Qwen3-32B:groq",
+            "meta-llama/Llama-3.3-70B-Instruct:groq",
+        ],
+        "openrouter": [
+            "openrouter/owl-alpha",
+            "google/gemma-4-26b-a4b-it:free"
+            "google/gemma-4-31b-it:free",
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+            "qwen/qwen3-next-80b-a3b-instruct:free",
+            "qwen/qwen3-coder:free",
+            "openai/gpt-oss-20b:free",
+            "openai/gpt-oss-120b:free",
+            "meta-llama/llama-3.2-3b-instruct:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+        ]
     }
 }
-
 
 PROMPTS = {
     "base":{
