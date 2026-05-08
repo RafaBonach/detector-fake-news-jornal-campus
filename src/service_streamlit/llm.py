@@ -3,75 +3,61 @@ import os
 import re
 import torch
 
-from service_streamlit.utils import select_prompt, remove_think, normalize_boolean_answer
+from service_streamlit.utils import select_prompt, remove_think, normalize_boolean_answer, get_api_key
+import config_base as config
 
-from transformers import AutoModelForCausalLM, AutoTokenizer
+#from transformers import AutoModelForCausalLM, AutoTokenizer
 from groq import Groq
 
-from google import genai
+#from google import genai
 
 from huggingface_hub import InferenceClient as InfClient
 
 from langchain_openrouter import ChatOpenRouter
 
+from langchain.agents import create_agent
+from langchain.chat_models import init_chat_model
+
 class LLMService:
     def __init__(self, model_name):
         self.model_name = model_name
+        self.provider = None
         self.prompt_template = select_prompt()
-        self.api_key = os.getenv("HUGGINGFACE_API_KEY")
+        self.api_key = None
 
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-
+        # self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+    
+        """
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             torch_dtype="auto",
             device_map="auto",
         )
-
-        self.gclient = genai.Client(
-            api_key=os.getenv("GOOGLE_API_KEY"),
-        )
-
-        self.groq_client = Groq(
-            api_key=os.getenv("GROQ_API_KEY"),
-        )
-
-        self.hf_client = InfClient(
-            api_key=os.getenv("HUGGINGFACE_API_KEY"),
-        )
-
-        self.openrouter_client = ChatOpenRouter(
-            model="openai/gpt-oss-120b:free",
-            api_key=os.getenv("OPENROUTER_API_KEY"),
-            temperature=0.8,
-        )
-
-    def get_model_name(self):
-        return self.model_name
-
-    def call_gemini(self, prompt):
-        response = self.gclient.models.generate_content(
-            model="gemini-3.1-flash-lite-preview",
-            contents=prompt
-        )
-        return response.text
-
+        """
+        
+        self.__models_available__ = []
+        self.__providers_available__ = {prov: None for prov in config.MODELS.keys()}
+    
     def call_groq(self, prompt):
-        response = self.groq_client.chat.completions.create(
+        groq_client = Groq(api_key=self.api_key)
+
+        response = groq_client.chat.completions.create(
+            model=self.model_name,
             messages=[
                 {
                     "role": "system",
                     "content": prompt,  
                 }
             ],
-            model="llama-3.3-70b-versatile",
         )
 
         return response.choices[0].message.content.strip()
 
     def call_huggingface(self, prompt):
-        response = self.hf_client.chat.completions.create(
-            model="katanemo/Arch-Router-1.5B:hf-inference",
+        hf_client = InfClient(api_key=self.api_key)
+
+        response = hf_client.chat.completions.create(
+            model=self.model_name,
             messages=[
                 {
                     "role": "system",
@@ -82,8 +68,92 @@ class LLMService:
         return response.choices[0].message.content.strip()
     
     def call_openrouter(self, prompt):
-        response = self.openrouter_client.invoke(prompt)
+        op_client = ChatOpenRouter(api_key=self.api_key, model=self.model_name)
+        
+        response = op_client.invoke(prompt)
+
         return response.content.strip()
+
+
+    def __select_provider__(self):
+        provider = ""
+        for provider, models in config.MODELS.items():
+            if self.model_name in models:
+                self.provider = provider
+                break
+
+    def __call__(self, prompt):
+        if self.provider is None:
+            self.__select_provider__()
+
+        # debug
+        print(f"\n\n\nModelo {self.model_name} selecionado utilizando o provedor {self.provider}.\n\n\n")
+        
+        self.api_key = get_api_key(self.provider)
+
+        # debug
+        if self.api_key is None:
+            print(f"\n\n\n⚠️ Atenção: Nenhuma chave de API encontrada para o provedor {self.provider}. Verifique as variáveis de ambiente.\n\n\n")
+        else:
+            print(f"\n\n\nUma chave de API foi encontrada para o provedor {self.provider}.\n\n\n")
+
+        if self.provider == "groq":
+            return self.call_groq(prompt)
+        elif self.provider == "huggingface":
+            return self.call_huggingface(prompt)
+        elif self.provider == "openrouter":
+            return self.call_openrouter(prompt)
+        else:
+            raise ValueError(f"Modelo {self.model_name} não associado a nenhum provedor conhecido.")
+
+
+    def answer_question(self, user_question):
+        prompt = self.prompt_template.format(
+            question = user_question
+        )
+
+        answer = self.__call__(prompt)
+
+        """ Usando modelo com Huggingface
+        answer = self.call_huggingface(prompt)
+        """
+
+        """ Usando modelo Groq puro
+        answer = self.call_groq(prompt)
+        """
+
+        """ Usando modelo Gemini
+        answer = self.call_gemini(prompt)
+        """
+
+        """ Usando modelo com transformer
+        answer = self.call_llm(prompt)
+
+        if answer and self._seems_not_portuguese(answer):
+            rewrite_prompt = (
+                "Reescreva o texto abaixo em português brasileiro, mantendo exatamente o mesmo significado, "
+                "sem adicionar fatos novos:\n\n"
+                f"{answer}"
+            )
+            answer = self.call_llm(rewrite_prompt, force_portuguese=True)
+        """
+
+        if not answer:
+            print("Nenhuma resposta encontrada para a pergunta.")
+            return "Desculpe, não consegui encontrar uma resposta para sua pergunta."
+        
+        return answer
+
+    
+    """ Métodos defasados
+
+    
+    def call_gemini(self, prompt):
+        response = self.gclient.models.generate_content(
+            model="gemini-3.1-flash-lite-preview",
+            contents=prompt
+        )
+        return response.text
 
     def call_llm(self, prompt, force_portuguese=False):
         system_content = (
@@ -157,41 +227,5 @@ class LLMService:
 
         return "true" if true_score > false_score else "false"
 
-    def answer_question(self, user_question):
-        prompt = self.prompt_template.format(
-            question = user_question
-        )
-
-        answer = self.call_openrouter(prompt)
-
-        """ Usando modelo com Huggingface
-        answer = self.call_huggingface(prompt)
-        """
-
-        """ Usando modelo Groq puro
-        answer = self.call_groq(prompt)
-        """
-
-        """ Usando modelo Gemini
-        answer = self.call_gemini(prompt)
-        """
-
-        """ Usando modelo com transformer
-        answer = self.call_llm(prompt)
-
-        if answer and self._seems_not_portuguese(answer):
-            rewrite_prompt = (
-                "Reescreva o texto abaixo em português brasileiro, mantendo exatamente o mesmo significado, "
-                "sem adicionar fatos novos:\n\n"
-                f"{answer}"
-            )
-            answer = self.call_llm(rewrite_prompt, force_portuguese=True)
-        """
-
-        if not answer:
-            print("Nenhuma resposta encontrada para a pergunta.")
-            return "Desculpe, não consegui encontrar uma resposta para sua pergunta."
         
-        return answer
-
-    
+        """
