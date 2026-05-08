@@ -1,5 +1,6 @@
-from config_base import PROMPTS
+from config_base import PROMPTS, MODELS
 import re
+import os
 
 def select_prompt(prompt_cat= None | str, prompt_typ= None | str) -> str:
     """Construtor de prompt baseado na categoria e no tipo.
@@ -59,6 +60,32 @@ def normalize_boolean_answer(answer) -> str:
         return "false"
 
     return "false"
+
+def select_model(model: dict) -> tuple[str, str]:
+    """Seleciona o modelo a ser utilizado com base no dicionário de modelos disponíveis.
+    Argumentos:
+        model (dict): O dicionário contendo as informações do modelo.
+    Retorna:
+        tuple: Uma tupla contendo o provedor e o modelo.
+    """
+    return str(model.key()), str(model.values())
+
+def get_api_key(provider: str) -> str:
+    """Recupera a chave de API para o provedor especificado.
+    Argumentos:
+        provider (str): O nome do provedor para o qual a chave de API é necessária.
+    Retorna:
+        str: A chave de API correspondente ao provedor.
+    """
+
+    if provider == "groq":
+        return os.getenv("GROQ_API_KEY")
+    elif provider == "huggingface":
+        return os.getenv("HUGGINGFACE_API_KEY")
+    elif provider == "openrouter":
+        return os.getenv("OPENROUTER_API_KEY")
+    else:
+        raise ValueError(f"Provedor desconhecido: {provider}")
 
 if __name__ == "__main__":
     print(select_prompt())
