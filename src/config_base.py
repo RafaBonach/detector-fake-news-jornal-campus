@@ -2,8 +2,7 @@ pt_br = " Responda exclusivamente em português brasileiro. Nunca responda em in
 think = " /think"
 no_think = " /no_think"
 MODELS = {
-    "groq": {
-        "vanilla": [
+    "groq": [
             'allam-2-7b',
             "groq/compound",
             "groq/compound-mini",
@@ -15,28 +14,27 @@ MODELS = {
             "openai/gpt-oss-20b",
             "openai/gpt-oss-safeguard-20b",
             "qwen/qwen3-32b",
-        ],
-        "huggingface": [
-            "openai/gpt-oss-20b:groq",
-            "openai/gpt-oss-safeguard-20b:groq",
-            "openai/gpt-oss-120b:groq",
-            "Qwen/Qwen3-32B:groq",
-            "meta-llama/Llama-3.3-70B-Instruct:groq",
-        ],
-        "openrouter": [
-            "openrouter/owl-alpha",
-            "google/gemma-4-26b-a4b-it:free"
-            "google/gemma-4-31b-it:free",
-            "nvidia/nemotron-3-super-120b-a12b:free",
-            "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-            "qwen/qwen3-next-80b-a3b-instruct:free",
-            "qwen/qwen3-coder:free",
-            "openai/gpt-oss-20b:free",
-            "openai/gpt-oss-120b:free",
-            "meta-llama/llama-3.2-3b-instruct:free",
-            "meta-llama/llama-3.3-70b-instruct:free",
-        ]
-    }
+    ],
+    "huggingface": [
+        "openai/gpt-oss-20b:groq",
+        "openai/gpt-oss-safeguard-20b:groq",
+        "openai/gpt-oss-120b:groq",
+        "Qwen/Qwen3-32B:groq",
+        "meta-llama/Llama-3.3-70B-Instruct:groq",
+    ],
+    "openrouter": [
+        "openrouter/owl-alpha",
+        "google/gemma-4-26b-a4b-it:free"
+        "google/gemma-4-31b-it:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "qwen/qwen3-coder:free",
+        "openai/gpt-oss-20b:free",
+        "openai/gpt-oss-120b:free",
+        "meta-llama/llama-3.2-3b-instruct:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+    ]
 }
 
 PROMPTS = {
