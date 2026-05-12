@@ -1,6 +1,6 @@
 import streamlit as st
 from service_streamlit.llm import LLMService
-import config_base as config
+from service_streamlit.utils import get_models
 
 def show():
     st.header(f"💬 Chatbot")
@@ -13,19 +13,15 @@ def show():
     )
 
     # Seletor de modelos: achata listas em `config.MODELS` e remove duplicatas preservando ordem
-    seen = set()
-    model_options = []
-    for models in config.MODELS.values():
-        for m in models:
-            if m not in seen:
-                seen.add(m)
-                model_options.append(m)
-    
-    model_options.sort()  # Ordena alfabeticamente
-    model_options.insert(0, "")  # Opção padrão no topo
+    if "selected_model" not in st.session_state:
+        st.session_state.selected_model = ""
 
+    model_options = [""] + get_models("groq")
+
+    # Seletor de modelos
     with st.container(border=True):
-        model = st.selectbox("Selecione um modelo", model_options, index=0)
+        st.selectbox("Selecione um modelo", model_options, key="selected_model")
+    model = st.session_state.selected_model
     
     # Verificador: avisa se nenhum modelo foi selecionado
     if model == "":
@@ -47,7 +43,10 @@ def show():
 
             with st.chat_message("assistant"):
                 with st.spinner("Processando..."):
-                    if 'llm_service' not in st.session_state:
+                    if (
+                        'llm_service' not in st.session_state
+                        or st.session_state.llm_service.model_name != model
+                    ):
                         st.session_state.llm_service = LLMService(model_name=str(model))
                     
                     try:

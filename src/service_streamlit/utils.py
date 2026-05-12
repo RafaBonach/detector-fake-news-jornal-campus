@@ -70,6 +70,27 @@ def select_model(model: dict) -> tuple[str, str]:
     """
     return str(model.key()), str(model.values())
 
+def get_models(key: str|None = None) -> list[str]:
+    """Recupera a lista de modelos disponíveis a partir do dicionário MODELS.
+    Retorna:
+        list: Uma lista contendo os nomes dos modelos disponíveis.
+    """
+    if key:
+        model_options = MODELS.get(key, [])
+        model_options.sort()  # Ordena alfabeticamente
+        return model_options
+    
+    seen = set()
+    model_options = []
+    for models in MODELS.values():
+        for m in models:
+            if m not in seen:
+                seen.add(m)
+                model_options.append(m)
+    
+    model_options.sort()  # Ordena alfabeticamente
+    return model_options
+
 def get_api_key(provider: str) -> str:
     """Recupera a chave de API para o provedor especificado.
     Argumentos:
