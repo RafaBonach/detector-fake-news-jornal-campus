@@ -38,7 +38,7 @@ class LLMService:
         self.__models_available__ = []
         self.__providers_available__ = {prov: None for prov in config.MODELS.keys()}
     
-    def call_groq(self, prompt):
+    def call_groq(self, prompt, seed=None):
         groq_client = Groq(api_key=self.api_key)
 
         response = groq_client.chat.completions.create(
@@ -49,6 +49,7 @@ class LLMService:
                     "content": prompt,  
                 }
             ],
+            seed=seed,
         )
 
         return response.choices[0].message.content.strip()
