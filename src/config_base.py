@@ -3,17 +3,17 @@ think = " /think"
 no_think = " /no_think"
 MODELS = {
     "groq": [
-            'allam-2-7b',
-            "groq/compound",
-            "groq/compound-mini",
-            "llama-3.1-8b-instant",
-            "meta-llama/llama-4-scout-17b-16e-instruct",
-            "meta-llama/llama-prompt-guard-2-22m",
-            "meta-llama/llama-prompt-guard-2-86m",
-            "openai/gpt-oss-120b",
-            "openai/gpt-oss-20b",
-            "openai/gpt-oss-safeguard-20b",
-            "qwen/qwen3-32b",
+        'allam-2-7b',
+        "groq/compound",
+        "groq/compound-mini",
+        "llama-3.1-8b-instant",
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "meta-llama/llama-prompt-guard-2-22m",
+        "meta-llama/llama-prompt-guard-2-86m",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "openai/gpt-oss-safeguard-20b",
+        "qwen/qwen3-32b",
     ],
     "huggingface": [
         "openai/gpt-oss-20b:groq",
@@ -51,10 +51,10 @@ PROMPTS = {
         "3) Se não tiver confiança em um detalhe, diga explicitamente: 'Não tenho evidência suficiente para esse detalhe'.\n"
         "4) Não use linguagem especulativa.",
 
-        "zero-shot": "Você é um classificador binário de desinformação. "
-        "Classifique a seguinte afirmação como 'Falsa' ou 'Verdadeira':"
-        "\n\nMensagem : {question}.\n\n"
-        "Retorne sem explicação adicional exatamente uma palavra: falsa ou verdadeira." + pt_br,
+        "zero-shot": "Você é um classificador binário de desinformação. Responda apenas em JSON minimalista, sem explicações nem texto adicional.\\n"
+        "        Use exatamente este formato de saída:\n"
+        """        {"classification_analysis":[{"news_index": int, "classification": 0 | 1}]}\n"""
+        "        Retorne somente o JSON acima, nada mais.",
     },
     "definition": ""
 }
