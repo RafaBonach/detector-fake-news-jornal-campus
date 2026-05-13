@@ -101,6 +101,8 @@ def get_api_key(provider: str) -> str:
 
     if provider == "groq":
         return os.getenv("GROQ_API_KEY")
+    elif provider == "groq_analyser":
+        return os.getenv("GROQ_API_KEY_ANALYSER")
     elif provider == "huggingface":
         return os.getenv("HUGGINGFACE_API_KEY")
     elif provider == "openrouter":
