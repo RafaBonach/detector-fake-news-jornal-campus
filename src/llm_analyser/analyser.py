@@ -173,9 +173,14 @@ class Analyser:
         return classifications
 
     def compute_metrics(self) -> dict[str, float]:
-        precision = precision_score(self.df_results["answers"], self.df_results["predictions"], zero_division=0)
-        recall = recall_score(self.df_results["answers"], self.df_results["predictions"], zero_division=0)
-        f1 = f1_score(self.df_results["answers"], self.df_results["predictions"], zero_division=0)
+        """ Observação: Essa função excluir as linhas com NaN para a mensura dos dados.
+        Talvez isso deva ser melhor tratado no futuro.
+        """
+        results = self.df_results.dropna(subset=["predictions"])
+
+        precision = precision_score(results["answers"], results["predictions"], zero_division=0)
+        recall = recall_score(results["answers"], results["predictions"], zero_division=0)
+        f1 = f1_score(results["answers"], results["predictions"], zero_division=0)
 
         print(f"Precision: {precision:.4f}")
         print(f"Recall: {recall:.4f}")
