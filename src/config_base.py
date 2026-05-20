@@ -1,6 +1,7 @@
 pt_br = " Responda exclusivamente em português brasileiro. Nunca responda em inglês."
 think = " /think"
 no_think = " /no_think"
+
 MODELS = {
     "groq": [
         'allam-2-7b',
@@ -24,7 +25,7 @@ MODELS = {
     ],
     "openrouter": [
         "openrouter/owl-alpha",
-        "google/gemma-4-26b-a4b-it:free"
+        "google/gemma-4-26b-a4b-it:free",
         "google/gemma-4-31b-it:free",
         "nvidia/nemotron-3-super-120b-a12b:free",
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
@@ -51,10 +52,14 @@ PROMPTS = {
         "3) Se não tiver confiança em um detalhe, diga explicitamente: 'Não tenho evidência suficiente para esse detalhe'.\n"
         "4) Não use linguagem especulativa.",
 
-        "zero-shot": "Você é um classificador binário de desinformação. Responda apenas em JSON minimalista, sem explicações nem texto adicional.\\n"
-        "        Use exatamente este formato de saída:\n"
-        """        {"classification_analysis":[{"news_index": int, "classification": 0 | 1}]}\n"""
-        "        Retorne somente o JSON acima, nada mais.",
+        "zero-shot": "Você é um classificador binário de desinformação.\n"
+            "Classifique CADA notícia abaixo como verdadeira (1) ou falsa (0).\n"
+            "Responda SOMENTE com um objeto JSON válido, sem texto adicional, sem markdown, sem explicações.\n"
+            "Formato obrigatório:\n"
+            '{"classifications": [<int>, <int>, ...]}\n'
+            "A lista deve ter exatamente o mesmo número de elementos que as notícias fornecidas, "
+            "na mesma ordem.\n\n"
+
     },
-    "definition": ""
+    "definition": "",
 }
