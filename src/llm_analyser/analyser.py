@@ -23,7 +23,7 @@ from groq import Groq
 load_dotenv()
 
 # Contantes
-REQUESTINTERVAL = 60  # Intervalo entre requisições em segundos
+REQUESTINTERVAL = 10  # Intervalo entre requisições em segundos
 DATABASES_PATH = {
     "fake-br": "/home/rafael/Projetos/campus_multiplataforma_llm/src/database/Fake-Br/pre-processed_tratada.csv",
     "fake-recogna_no_removal_words": "/home/rafael/Projetos/campus_multiplataforma_llm/src/database/FakeRecogna/FakeRecogna_no_removal_words_tratada.csv",
@@ -51,7 +51,7 @@ class Analyser:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.results_path = self.output_dir / "df_results.csv"
         self.responses_path = self.output_dir / "responses.jsonl"
-        self.__wait_time_llm_request__ = None      
+        self.__wait_time_llm_request__ = time.time()   
 
     def __set_database__(self, database_path: str):
         try:
@@ -69,15 +69,26 @@ class Analyser:
 
 
     def save_results(self, llm_answer: list[int] | None)-> None:
-        self.df_results["answers"] = self.database["Classe"].astype(int).to_frame().join(self.df_results)
+        # verifica se o arquivo output_dir / f"results_{self.database_name}.csv" já existe, se sim, carrega o DataFrame existente para atualizar, se não, cria um novo DataFrame
+        dir_results_path = self.output_dir / f"results_{self.database_name}.csv"
+        if (dir_results_path).exists():
+            self.df_results = pd.read_csv(self.output_dir / f"results_{self.database_name}.csv", index_col=0)
+        else:
+            self.df_results = pd.DataFrame()
+            self.df_results["answers"] = self.database["Classe"].astype(int).to_frame().join(self.df_results)
 
         if llm_answer is not None:
-            self.df_results["predictions"] = pd.Series(llm_answer)
+            if "predictions" not in self.df_results.columns:
+                self.df_results["predictions"] = pd.Series(llm_answer).astype('Int64').reset_index(drop=True)
+            else:
+                not_null_predictions = self.df_results["predictions"].dropna().tolist()
+                print(f"Predições não nulas existentes: {not_null_predictions}")
+                self.df_results.iloc[(len(not_null_predictions)):, "predictions"] = llm_answer
 
 
         # Salva o DataFrame completo com respostas e predições
-        self.df_results.to_csv(self.output_dir / f"results_{self.database_name}.csv", index=True)
-        print(f"Resultados salvos em: {self.output_dir / f'results_{self.database_name}.csv'}")
+        self.df_results.to_csv(dir_results_path, index=True)
+        print(f"Resultados salvos em: {dir_results_path}")
 
     def save_metrics(self, metrics: dict[str, float]) -> None:
         metrics_path = self.output_dir / f"metrics_{self.database_name}.json"
@@ -178,6 +189,8 @@ class Analyser:
         """
         results = self.df_results.dropna(subset=["predictions"])
 
+        print(results.info())
+
         precision = precision_score(results["answers"], results["predictions"], zero_division=0)
         recall = recall_score(results["answers"], results["predictions"], zero_division=0)
         f1 = f1_score(results["answers"], results["predictions"], zero_division=0)
@@ -187,6 +200,15 @@ class Analyser:
         print(f"F1-Score: {f1:.4f}")
 
         return {"precision": precision, "recall": recall, "f1": f1}
+    
+    def timer_check(self, limit=REQUESTINTERVAL):
+        elapsed_time = time.time() - self.__wait_time_llm_request__
+        if elapsed_time < limit:
+            wait_time = limit - elapsed_time
+            print(f"Aguardando {wait_time:.2f} segundos para a próxima requisição...")
+            time.sleep(wait_time)
+        self.__wait_time_llm_request__ = time.time()  # Reinicia o timer
+        return True
 
 def main():
     #0. Cria um objeto analyser
@@ -204,20 +226,32 @@ def main():
 
 
     """" ______Preciso implementar um loop para enviar cada batch, extrair as predições e incrementar o DataFrame de resultados a cada batch.______ """
+    # 2. Envia o lote de prompts um de vada vez através de um loop.
+    for i, batch_prompt in enumerate(batch_prompts):
+        if i > 0:
+            print(time.time()-analyser.__wait_time_llm_request__)
+            # Verifica se pode enviar a próxima requisiçao
+            analyser.timer_check(limit=REQUESTINTERVAL)
+        else:
+            analyser.__wait_time_llm_request__ = time.time()  # Inicia o timer para a primeira requisição
 
+        print(f"Enviando batch {i+1}/{len(batch_prompts)} para o Groq...")
+        #2.1 Envia um batch de notícias
+        response = analyser.chat_groq(batch_prompt) # Para teste, envia apenas o primeiro batch
 
-    response = analyser.chat_groq(batch_prompts[0]) # Para teste, envia apenas o primeiro batch
-
-    #2. Extrair as predições do groq e salvar
-    predictions = analyser.extract_predictions(response)
-    print(f"{len(predictions)} predições extraídas: {predictions}")
-    analyser.save_results(predictions)
+        #2.2 Extrair as predições do groq e salvar
+        predictions = analyser.extract_predictions(response)
+        print(f"{len(predictions)} predições extraídas: {predictions}")
+        analyser.save_results(predictions)
     
-    #3.1 Calcular métricas de avaliação (precision, recall, f1)
-    metrics = analyser.compute_metrics()
+        #2.3 Calcular métricas de avaliação (precision, recall, f1)
+        metrics = analyser.compute_metrics()
 
-    #3.2 Salva as métricas
-    analyser.save_metrics(metrics)
+        #2.4 Salva as métricas
+        analyser.save_metrics(metrics)
+
+        if i==2: # Para teste, processa apenas os 3 primeiros batches
+            break
 
 
 
