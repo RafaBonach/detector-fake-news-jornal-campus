@@ -11,7 +11,6 @@ from copy import deepcopy
 from pathlib import Path
 from dotenv import load_dotenv
 import time
-import concurrent.futures
 
 from sklearn.metrics import precision_score, recall_score, f1_score # Métricas de avaliação
 
@@ -30,7 +29,7 @@ DATABASES_PATH = {
     "fake-recogna_no_removal_words": "FakeRecogna_no_removal_words_tratada.csv",
     "fake-recogna2": "FakeRecogna_tratada.csv"
 }
-MAX_RETRIES: 2
+MAX_RETRIES: 3
 
 class Analyser:
     def __init__(self, model_name, database_name, database_length_limit: int | None = None):
@@ -133,6 +132,7 @@ class Analyser:
             self.df_results.loc[indices_nulos, "predictions"] = prediction[:len(indices_nulos)]
         
         return self.df_results
+
 
     def save_results(self, df: pd.DataFrame | None = None)-> None:
         if df is not None:
