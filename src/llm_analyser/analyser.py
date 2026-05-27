@@ -5,6 +5,7 @@ Observação: A implementação não está funcionando para mais de um batch.
 """
 import pandas as pd
 import json
+import itertools
 import numpy as np
 from copy import deepcopy
 from pathlib import Path
@@ -25,13 +26,14 @@ load_dotenv()
 # Contantes
 REQUESTINTERVAL = 10  # Intervalo entre requisições em segundos
 DATABASES_PATH = {
-    "fake-br": "/home/rafael/Projetos/campus_multiplataforma_llm/src/database/Fake-Br/pre-processed_tratada.csv",
-    "fake-recogna_no_removal_words": "/home/rafael/Projetos/campus_multiplataforma_llm/src/database/FakeRecogna/FakeRecogna_no_removal_words_tratada.csv",
-    "fake-recogna2": "/home/rafael/Projetos/campus_multiplataforma_llm/src/database/FakeRecogna/FakeRecogna_tratada.csv"
+    "fake-br": "pre-processed_tratada.csv",
+    "fake-recogna_no_removal_words": "FakeRecogna_no_removal_words_tratada.csv",
+    "fake-recogna2": "FakeRecogna_tratada.csv"
 }
+MAX_RETRIES: 2
 
 class Analyser:
-    def __init__(self, model_name, database_name, database_length_limit=int|None):
+    def __init__(self, model_name, database_name, database_length_limit: int | None = None):
         self.model_name = model_name
         self.api_key = get_api_key("groq_analyser")
         self.base_prompt = [
@@ -54,8 +56,14 @@ class Analyser:
         self.__wait_time_llm_request__ = time.time()   
 
     def __set_database__(self, database_path: str):
+        """
+        Carrega o CSV da base de dados, com tratamento de erros aprimorado para casos comuns como arquivo vazio ou formato inválido.
+        Parâmetros:
+        - database_path: Caminho para o arquivo CSV da base de dados.
+        """
         try:
-            self.database = pd.read_csv(database_path)
+            resolved_database_path = self._resolve_database_path(database_path)
+            self.database = pd.read_csv(resolved_database_path)
             if self.database_length_limit is not None:
                 self.database = self.database.head(self.database_length_limit)
 
@@ -67,25 +75,71 @@ class Analyser:
             print(f"Erro inesperado ao carregar database de {database_path}: {e}")
             self.database = None
 
+    def _resolve_database_path(self, database_path: str) -> Path:
+        """
+        Resolve um caminho absoluto/relativo ou procura o CSV pelo nome dentro do workspace.
+        Parâmetros:
+        - database_path: Pode ser um caminho absoluto, um caminho relativo ou apenas o nome do arquivo.
+        Retorna:
+        - Path: O caminho resolvido para o arquivo CSV.
+        """
+        """Resolve um caminho absoluto/relativo ou procura o CSV pelo nome dentro do workspace."""
+        candidate = Path(database_path)
 
-    def save_results(self, llm_answer: list[int] | None)-> None:
-        # verifica se o arquivo output_dir / f"results_{self.database_name}.csv" já existe, se sim, carrega o DataFrame existente para atualizar, se não, cria um novo DataFrame
-        dir_results_path = self.output_dir / f"results_{self.database_name}.csv"
-        if (dir_results_path).exists():
-            self.df_results = pd.read_csv(self.output_dir / f"results_{self.database_name}.csv", index_col=0)
+        if candidate.exists():
+            return candidate
+
+        search_names = [candidate.name]
+        if candidate.suffix.lower() != ".csv":
+            search_names.append(f"{candidate.name}.csv")
+
+        search_roots = [Path.cwd(), Path.cwd() / "src", Path.cwd() / "src" / "database"]
+
+        for search_name in search_names:
+            for root in search_roots:
+                if not root.exists():
+                    continue
+
+                exact_matches = sorted(root.rglob(search_name))
+                if exact_matches:
+                    if len(exact_matches) > 1:
+                        print(
+                            f"Aviso: mais de um CSV encontrado para '{database_path}'. "
+                            f"Usando '{exact_matches[0]}'."
+                        )
+                    return exact_matches[0]
+
+        raise FileNotFoundError(
+            f"Não foi possível localizar o CSV '{database_path}'. "
+            "Use um caminho válido ou o nome exato da planilha."
+        )
+
+    def prepare_dataframe(self, dataframe: pd.DataFrame, text_column: str) -> pd.DataFrame:
+        """Remove linhas sem texto ou sem classe e normaliza o índice para batching."""
+        cleaned_dataframe = dataframe.dropna(subset=[text_column, "Classe"]).copy()
+        return cleaned_dataframe.reset_index(drop=True)
+
+    def set_df_results(self, prediction: list[int], answer: list[int] | None) -> pd.DataFrame:
+        if self.df_results.empty:
+            if answer is not None and "answers" not in self.df_results.columns:
+                self.df_results["answers"] = pd.Series(answer).astype('Int64').reset_index(drop=True)
+            
+            # adiciona as respostas da LLM
+            self.df_results["predictions"] = pd.Series(prediction).astype('Int64').reset_index(drop=True)
+        
         else:
-            self.df_results = pd.DataFrame()
-            self.df_results["answers"] = self.database["Classe"].astype(int).to_frame().join(self.df_results)
+            # incrementa as respostas da LLM ao conjunto de respostas existente
+            indices_nulos = self.df_results[self.df_results["predictions"].isna()].index[:len(prediction)]
+            self.df_results.loc[indices_nulos, "predictions"] = prediction[:len(indices_nulos)]
+        
+        return self.df_results
 
-        if llm_answer is not None:
-            if "predictions" not in self.df_results.columns:
-                self.df_results["predictions"] = pd.Series(llm_answer).astype('Int64').reset_index(drop=True)
-            else:
-                not_null_predictions = self.df_results["predictions"].dropna().tolist()
-                print(f"Predições não nulas existentes: {not_null_predictions}")
-                self.df_results.iloc[(len(not_null_predictions)):, "predictions"] = llm_answer
-
-
+    def save_results(self, df: pd.DataFrame | None = None)-> None:
+        if df is not None:
+            self.df_results = df
+        
+        dir_results_path = self.output_dir / f"df_results_{self.database_name}.csv"
+        
         # Salva o DataFrame completo com respostas e predições
         self.df_results.to_csv(dir_results_path, index=True)
         print(f"Resultados salvos em: {dir_results_path}")
@@ -102,6 +156,7 @@ class Analyser:
         text_column: str,
         max_estimated_tokens: int = 5000,
     ) -> list[pd.DataFrame]:
+        dataframe = self.prepare_dataframe(dataframe, text_column)
         batches = []
         current_positions = []
         current_estimated_tokens = 0
@@ -137,29 +192,42 @@ class Analyser:
             batch_df = [self.database]
         
         for batch in batch_df:
-            prompt = deepcopy(self.base_prompt)
-            for news_index, news_text in batch[text_column].items():
-                news_text = news_text.replace("\n", " ").strip()
-                prompt.append({
-                    "role": "user",
-                    "content": json.dumps({
-                        "news_index": int(news_index),
-                        "news_text": news_text,
-                    }, ensure_ascii=False)
+            valid_batch = batch.dropna(subset=[text_column]).copy()
+            items = []
+            for news_index, news_text in valid_batch[text_column].items():
+                if pd.isna(news_text):
+                    continue
+                items.append({
+                    "news_index": int(news_index),
+                    "news_text": str(news_text).replace("\n", " ").strip(),
                 })
+
+            prompt = deepcopy(self.base_prompt)
+            prompt.append({
+                "role": "user",
+                "content": json.dumps({
+                    "batch_size": len(items),
+                    "items": items,
+                    "expected_classifications": len(items),
+                }, ensure_ascii=False)
+            })
 
             batch_prompts.append(prompt)
 
         return batch_prompts
 
-    def chat_groq(self, messages: list[dict]) -> list[dict] | None:
+    def chat_groq(self, messages: list[dict], expected_count: int | None = None) -> list[dict] | None:
         groq_client = Groq(api_key=self.api_key)
+
+        max_tokens = 1024 if expected_count is None else max(256, expected_count * 8)
 
         response = groq_client.chat.completions.create(
             messages=messages,
             model=self.model_name,
             temperature=0.0,
             seed=42,
+            top_p=1,
+            max_tokens=max_tokens,
             response_format={"type": "json_object"},
         )
 
@@ -210,54 +278,123 @@ class Analyser:
         self.__wait_time_llm_request__ = time.time()  # Reinicia o timer
         return True
 
+    def check_prediction(self, list_response: list[int], list_id_prompt: list[int]) -> list[int]:
+        """
+        Verificador que verifica se o número de predições retornado pela LLM corresponde ao número de
+        notícias enviadas no Batch. Caso o número de predições seja menor, retorna os IDs das notícias
+        que não receberam predições.
+        Entradas:
+        - list_response: Lista de dicionários retornada pela LLM
+        - list_id_prompt: Lista de IDs das notícias enviadas no prompt
+        Saída:
+        - missing_ids: Lista de IDs das notícias que não receberam predições ou uma lista vazia.
+        """
+        missing_ids = []
+
+        if not isinstance(list_response, list):
+            print(f"Resposta inesperada (não é uma lista): {list_response}")
+            return missing_ids
+                
+        for id_prompt, pred in itertools.zip_longest(list_id_prompt, list_response, fillvalue=None):
+            if pred is None:
+                missing_ids.append(id_prompt)
+
+        if len(missing_ids) > 0:
+            print(f"Predições faltantes para os IDs: {missing_ids}")
+        
+        return missing_ids
+    
 def main():
     #0. Cria um objeto analyser
-    analyser = Analyser(model_name="meta-llama/llama-4-scout-17b-16e-instruct", database_name="fake-recogna_no_removal_words", database_length_limit=100)
-
-
+    analyser = Analyser(model_name="meta-llama/llama-4-scout-17b-16e-instruct", database_name="fake-recogna_no_removal_words", database_length_limit=1000)
 
     #1. Pegar as notícias que serão analisadas, juntar ao prompt base e enviar para o groq fazer análise.
     # 1.1 Separa as notícias em batches (se necessário) para não estourar limite de tokens do groq
-    batche_news = analyser.split_dataframe(analyser.database, text_column="Titulo", max_estimated_tokens=5000)
+    clean_database = analyser.prepare_dataframe(analyser.database, text_column="Titulo")
+    batche_news = analyser.split_dataframe(clean_database, text_column="Titulo", max_estimated_tokens=29000)
 
     # 1.2 Envia cada batch para o groq e salva as respostas completas
     batch_prompts = analyser.build_prompt(text_column="Titulo", batch_df=batche_news)
 
-
-
+    list_answers = clean_database["Classe"].astype(int).tolist()
     """" ______Preciso implementar um loop para enviar cada batch, extrair as predições e incrementar o DataFrame de resultados a cada batch.______ """
     # 2. Envia o lote de prompts um de vada vez através de um loop.
-    for i, batch_prompt in enumerate(batch_prompts):
+    for i, (batch_prompt, batch_news) in enumerate(zip(batch_prompts, batche_news)):
         if i > 0:
-            print(time.time()-analyser.__wait_time_llm_request__)
             # Verifica se pode enviar a próxima requisiçao
             analyser.timer_check(limit=REQUESTINTERVAL)
         else:
             analyser.__wait_time_llm_request__ = time.time()  # Inicia o timer para a primeira requisição
 
-        print(f"Enviando batch {i+1}/{len(batch_prompts)} para o Groq...")
-        #2.1 Envia um batch de notícias
-        response = analyser.chat_groq(batch_prompt) # Para teste, envia apenas o primeiro batch
+        # pending_df: notícias ainda sem predição neste batch
+        # pending_predictions: predições já coletadas para este batch (indexadas pelo índice do df)
+        pending_df = batch_news.copy()
+        collected_predictions: dict[int, int] = {}  # {índice_original: predição}
 
-        #2.2 Extrair as predições do groq e salvar
-        predictions = analyser.extract_predictions(response)
-        print(f"{len(predictions)} predições extraídas: {predictions}")
-        analyser.save_results(predictions)
+        attempt = 0
+
+        while (len(pending_df) > 0) and (attempt < MAX_RETRIES):  # Limite de tentativas para evitar loop infinito
+            attempt += 1
+            print(f"  Tentativa {attempt}/{MAX_RETRIES} — enviando {len(pending_df)} notícias...\n")
+
+
+            print(f"Enviando batch {i+1}/{len(batch_prompts)} para o Groq...")
+
+            #2.1 Envia um batch de notícias
+            #response = analyser.chat_groq(batch_prompt, expected_count=len(pending_df))
+
+            #2.2 Extrair as predições do groq e seta o DataFrame de resultados
+            #predictions = analyser.extract_predictions(response)
+            """ APENAS PARA TESTE, REMOVER DEPOIS: """
+            predictions = [0] * (len(pending_df)-30) 
+
+            if predictions is None:
+                print(f"  Tentativa {attempt}: resposta inválida. Tentando novamente...")
+                continue
+
+            #2.3 Verifica as predições faltantes
+            pending_ids = pending_df.index.tolist()
+            missing_ids = analyser.check_prediction(predictions, pending_ids)
+
+            # Mapeia as predições recebidas para os índies originais
+            for idx, pred in zip (pending_ids, predictions):
+                collected_predictions[idx] = pred
+            
+            if not missing_ids:
+                print(f"  ✓ Todas as {len(pending_df)} predições recebidas.")
+                pending_df = pd.DataFrame()  # Zera — batch completo
+                break
+
+            # Monta novo sub-batch apenas com as notícias faltantes
+            print(f"  {len(missing_ids)} predições faltantes. Remontando sub-batch...")
+            pending_df = batch_news.loc[missing_ids].copy()
+            current_prompt = analyser.build_prompt(text_column="Titulo", batch_df=[pending_df])[0]
+            analyser.timer_check(limit=REQUESTINTERVAL)
+
+
+        #2.4 Após retires, preenche com NAN os índices que continuaram sem predições
+        if len(pending_df) > 0:
+            print(
+                f"  ✗ Batch {i+1}: {len(pending_df)} notícias sem predição após "
+                f"{MAX_RETRIES} tentativas. Preenchendo com NaN."
+            )
+            for idx in pending_df.index.tolist():
+                collected_predictions[idx] = pd.NA
+
+        #2.5 Grava as predições coletadas no df_results na ordem correta
+        for idx, pred in collected_predictions.items():
+            analyser.df_results.at[idx, "predictions"] = pred
+
+        print(f"  df_results atualizado: {analyser.df_results['predictions'].notna().sum()} predições acumuladas.")
     
-        #2.3 Calcular métricas de avaliação (precision, recall, f1)
-        metrics = analyser.compute_metrics()
+    #3 Salva o DataFrame de resultados completo (respostas + predições)
+    analyser.save_results()
 
-        #2.4 Salva as métricas
-        analyser.save_metrics(metrics)
+    #2.3 Calcular métricas de avaliação (precision, recall, f1)
+    metrics = analyser.compute_metrics()
 
-        if i==2: # Para teste, processa apenas os 3 primeiros batches
-            break
-
-
-
-    #analyser.analyse(database_name="fake-br", text_column="preprocessed_news", df_line_limit=1000)
-    #analyser.analyse(database_name="fake-recogna1", text_column="Titulo", df_line_limit=1000)
-    #analyser.analyse(database_name="fake-recogna2", text_column="Titulo", df_line_limit=1000)
+    #2.4 Salva as métricas
+    analyser.save_metrics(metrics)
 
 if __name__ == "__main__":
     main()
