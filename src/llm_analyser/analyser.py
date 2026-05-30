@@ -1,7 +1,8 @@
 """
-Observação: A implementação não está funcionando para mais de um batch.
-    - Preciso ajustar um loop que enviar todos os batches para o groq.
-    - Caso haja NaN no DataFrame, as linhas com NaN devem ser ignoradas.
+Analyzer para classificação de notícias usando modelos LLM via Groq.
+- Processa múltiplos batches de notícias
+- Preenche com NaN as predições faltantes (sem retry)
+- Calcula métricas de avaliação (precision, recall, f1)
 """
 import pandas as pd
 import json
@@ -29,7 +30,7 @@ DATABASES_PATH = {
     "fake-recogna_no_removal_words": "FakeRecogna_no_removal_words_tratada.csv",
     "fake-recogna2": "FakeRecogna_tratada.csv"
 }
-MAX_RETRIES: 3
+TEXT_COLUMN = "Titulo"
 
 class Analyser:
     def __init__(self, model_name, database_name, database_length_limit: int | None = None):
@@ -132,6 +133,29 @@ class Analyser:
             self.df_results.loc[indices_nulos, "predictions"] = prediction[:len(indices_nulos)]
         
         return self.df_results
+
+    def set_answers(self, dataframe: pd.DataFrame, answer_column: str = "Classe") -> None:
+        """
+        Salva as respostas esperadas da coluna especificada do dataframe em df_results.
+        Parâmetros:
+        - dataframe: DataFrame contendo a coluna com as respostas esperadas
+        - answer_column: Nome da coluna que contém as respostas (padrão: "Classe")
+        """
+        if answer_column not in dataframe.columns:
+            raise ValueError(f"Coluna '{answer_column}' não encontrada no DataFrame.")
+        
+        answers = dataframe[answer_column].astype('Int64').reset_index(drop=True)
+        self.df_results["answers"] = answers
+        print(f"✓ {len(answers)} respostas carregadas em df_results['answers']")
+
+    def set_predictions(self, idx: int, prediction: int | float) -> None:
+        """
+        Define uma predição específica no df_results na posição fornecida.
+        Parâmetros:
+        - idx: Índice da linha no df_results
+        - prediction: Valor da predição ou NaN
+        """
+        self.df_results.at[idx, "predictions"] = prediction
 
 
     def save_results(self, df: pd.DataFrame | None = None)-> None:
@@ -252,16 +276,23 @@ class Analyser:
         return classifications
 
     def compute_metrics(self) -> dict[str, float]:
-        """ Observação: Essa função excluir as linhas com NaN para a mensura dos dados.
-        Talvez isso deva ser melhor tratado no futuro.
-        """
-        results = self.df_results.dropna(subset=["predictions"])
-
+        """ Calcula métricas de avaliação (precision, recall, f1) excluindo linhas com NaN em predictions. """
+        results = self.df_results.dropna(subset=["predictions"]).copy()
+        
+        if len(results) == 0:
+            print("⚠ Nenhuma predição válida para calcular métricas.")
+            return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
+        
+        # Converte para int puro para compatibilidade com sklearn
+        y_true = results["answers"].astype(int).values
+        y_pred = results["predictions"].astype(int).values
+        
+        print(f"Calculando métricas com {len(results)} amostras...")
         print(results.info())
 
-        precision = precision_score(results["answers"], results["predictions"], zero_division=0)
-        recall = recall_score(results["answers"], results["predictions"], zero_division=0)
-        f1 = f1_score(results["answers"], results["predictions"], zero_division=0)
+        precision = precision_score(y_true, y_pred, zero_division=0)
+        recall = recall_score(y_true, y_pred, zero_division=0)
+        f1 = f1_score(y_true, y_pred, zero_division=0)
 
         print(f"Precision: {precision:.4f}")
         print(f"Recall: {recall:.4f}")
@@ -306,18 +337,20 @@ class Analyser:
     
 def main():
     #0. Cria um objeto analyser
-    analyser = Analyser(model_name="meta-llama/llama-4-scout-17b-16e-instruct", database_name="fake-recogna_no_removal_words", database_length_limit=1000)
+    analyser = Analyser(model_name="meta-llama/llama-4-scout-17b-16e-instruct", database_name="fake-recogna2", database_length_limit=500)
 
     #1. Pegar as notícias que serão analisadas, juntar ao prompt base e enviar para o groq fazer análise.
     # 1.1 Separa as notícias em batches (se necessário) para não estourar limite de tokens do groq
-    clean_database = analyser.prepare_dataframe(analyser.database, text_column="Titulo")
-    batche_news = analyser.split_dataframe(clean_database, text_column="Titulo", max_estimated_tokens=29000)
+    clean_database = analyser.prepare_dataframe(analyser.database, text_column=TEXT_COLUMN)
+    batche_news = analyser.split_dataframe(clean_database, text_column=TEXT_COLUMN, max_estimated_tokens=17000)
 
     # 1.2 Envia cada batch para o groq e salva as respostas completas
-    batch_prompts = analyser.build_prompt(text_column="Titulo", batch_df=batche_news)
+    batch_prompts = analyser.build_prompt(text_column=TEXT_COLUMN, batch_df=batche_news)
 
-    list_answers = clean_database["Classe"].astype(int).tolist()
-    """" ______Preciso implementar um loop para enviar cada batch, extrair as predições e incrementar o DataFrame de resultados a cada batch.______ """
+    # 1.3 Inicializa df_results com as respostas esperadas (answers) usando o método
+    analyser.set_answers(clean_database, answer_column="Classe")
+    analyser.df_results["predictions"] = pd.NA
+
     # 2. Envia o lote de prompts um de vada vez através de um loop.
     for i, (batch_prompt, batch_news) in enumerate(zip(batch_prompts, batche_news)):
         if i > 0:
@@ -326,66 +359,43 @@ def main():
         else:
             analyser.__wait_time_llm_request__ = time.time()  # Inicia o timer para a primeira requisição
 
-        # pending_df: notícias ainda sem predição neste batch
-        # pending_predictions: predições já coletadas para este batch (indexadas pelo índice do df)
-        pending_df = batch_news.copy()
         collected_predictions: dict[int, int] = {}  # {índice_original: predição}
 
-        attempt = 0
+        print(f"Enviando batch {i+1}/{len(batch_prompts)} para o Groq...")
 
-        while (len(pending_df) > 0) and (attempt < MAX_RETRIES):  # Limite de tentativas para evitar loop infinito
-            attempt += 1
-            print(f"  Tentativa {attempt}/{MAX_RETRIES} — enviando {len(pending_df)} notícias...\n")
+        #2.1 Envia um batch de notícias
+        response = analyser.chat_groq(batch_prompt, expected_count=len(batch_news))
 
+        #2.2 Extrair as predições do groq
+        predictions = analyser.extract_predictions(response)
 
-            print(f"Enviando batch {i+1}/{len(batch_prompts)} para o Groq...")
-
-            #2.1 Envia um batch de notícias
-            #response = analyser.chat_groq(batch_prompt, expected_count=len(pending_df))
-
-            #2.2 Extrair as predições do groq e seta o DataFrame de resultados
-            #predictions = analyser.extract_predictions(response)
-            """ APENAS PARA TESTE, REMOVER DEPOIS: """
-            predictions = [0] * (len(pending_df)-30) 
-
-            if predictions is None:
-                print(f"  Tentativa {attempt}: resposta inválida. Tentando novamente...")
-                continue
-
+        if predictions is None:
+            print(f"  ✗ Resposta inválida para batch {i+1}. Preenchendo com NaN.")
+            # Preencher todas as notícias com NaN
+            for idx in batch_news.index.tolist():
+                collected_predictions[idx] = pd.NA
+        else:
             #2.3 Verifica as predições faltantes
-            pending_ids = pending_df.index.tolist()
-            missing_ids = analyser.check_prediction(predictions, pending_ids)
+            batch_ids = batch_news.index.tolist()
+            missing_ids = analyser.check_prediction(predictions, batch_ids)
 
-            # Mapeia as predições recebidas para os índies originais
-            for idx, pred in zip (pending_ids, predictions):
+            # Mapeia as predições recebidas para os índices originais
+            for idx, pred in zip(batch_ids, predictions):
                 collected_predictions[idx] = pred
             
-            if not missing_ids:
-                print(f"  ✓ Todas as {len(pending_df)} predições recebidas.")
-                pending_df = pd.DataFrame()  # Zera — batch completo
-                break
+            # Preenche com NaN as notícias que não receberam predição
+            if missing_ids:
+                print(f"  {len(missing_ids)} predições faltantes. Preenchendo com NaN.")
+                for idx in missing_ids:
+                    collected_predictions[idx] = pd.NA
+            else:
+                print(f"  ✓ Todas as {len(batch_news)} predições recebidas.")
 
-            # Monta novo sub-batch apenas com as notícias faltantes
-            print(f"  {len(missing_ids)} predições faltantes. Remontando sub-batch...")
-            pending_df = batch_news.loc[missing_ids].copy()
-            current_prompt = analyser.build_prompt(text_column="Titulo", batch_df=[pending_df])[0]
-            analyser.timer_check(limit=REQUESTINTERVAL)
-
-
-        #2.4 Após retires, preenche com NAN os índices que continuaram sem predições
-        if len(pending_df) > 0:
-            print(
-                f"  ✗ Batch {i+1}: {len(pending_df)} notícias sem predição após "
-                f"{MAX_RETRIES} tentativas. Preenchendo com NaN."
-            )
-            for idx in pending_df.index.tolist():
-                collected_predictions[idx] = pd.NA
-
-        #2.5 Grava as predições coletadas no df_results na ordem correta
+        #2.4 Grava as predições coletadas no df_results na ordem correta usando o método
         for idx, pred in collected_predictions.items():
-            analyser.df_results.at[idx, "predictions"] = pred
+            analyser.set_predictions(idx, pred)
 
-        print(f"  df_results atualizado: {analyser.df_results['predictions'].notna().sum()} predições acumuladas.")
+        print(f"  Batch {i+1} concluído: {analyser.df_results['predictions'].notna().sum()} predições acumuladas (com NaN).")
     
     #3 Salva o DataFrame de resultados completo (respostas + predições)
     analyser.save_results()
