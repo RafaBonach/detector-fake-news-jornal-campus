@@ -25,35 +25,63 @@ load_dotenv()
 
 # Contantes
 REQUESTINTERVAL = 10  # Intervalo entre requisições em segundos
+SHORT_DF_NAME = {
+    "fake-br": "FB",
+    "fake-recogna_no_removal_words": "FR1",
+    "fake-recogna2": "FR2"
+}
 DATABASES_PATH = {
     "fake-br": "pre-processed_tratada.csv",
     "fake-recogna_no_removal_words": "FakeRecogna_no_removal_words_tratada.csv",
     "fake-recogna2": "FakeRecogna_tratada.csv"
 }
-TEXT_COLUMN = "Titulo"
+
 
 class Analyser:
-    def __init__(self, model_name, database_name, database_length_limit: int | None = None):
+    def __init__(self, model_name: str, base_prompt_name: str, bool_def: bool, database_name: str, database_length_limit: int | None = None):
+        # Configurações do modelo
         self.model_name = model_name
         self.api_key = get_api_key("groq_analyser")
-        self.base_prompt = [
-            {
-                "role": "system",
-                "content": PROMPTS["base"]["zero-shot"]
-            }
-        ]
+
+        # Configurações do prompt
+        self.base_prompt = None
+        self.__set_base_prompt__(key_base=base_prompt_name, bool_def=bool_def)
+
+        # Configurações da base de dados
         self.database_name = database_name
         self.database_length_limit = database_length_limit
         self.database = None
         self.df_results = pd.DataFrame()
+        self.__set_database__(self.database_name)
 
-        self.__set_database__(DATABASES_PATH[self.database_name])
-
-        self.output_dir = Path("artifacts") / "analyser"
+        # Configurações de saída — usar a pasta `src/artifacts/analyser`
+        self.output_dir = Path(__file__).resolve().parent.parent / "artifacts" / "analyser"
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.results_path = self.output_dir / "df_results.csv"
         self.responses_path = self.output_dir / "responses.jsonl"
-        self.__wait_time_llm_request__ = time.time()   
+
+        # Outras configurações
+        self.__wait_time_llm_request__ = time.time()
+
+    def __set_base_prompt__(self, key_base: str = "zero-shot", bool_def: bool = False):
+        """Configura o prompt base a ser usado na análise, com base em uma chave pré-definida.
+        Parâmetros:
+        - key_base: Chave do prompt base a ser usado (deve estar presente em PROMPTS['base'])
+        - bool_def: Se True, adiciona a definição de fake news ao prompt base
+        """
+        if key_base not in PROMPTS["base"]:
+            raise ValueError(f"Chave '{key_base}' não encontrada em PROMPTS['base']. Opções disponíveis: {list(PROMPTS['base'].keys())}")
+        
+        self.base_prompt = [
+            {
+                "role": "system",
+                "content": PROMPTS["base"][key_base]
+            }
+        ]
+
+        if bool_def:
+            self.base_prompt[0]["content"] += f"\n\n{PROMPTS['definition']}"
+
 
     def __set_database__(self, database_path: str):
         """
@@ -64,7 +92,7 @@ class Analyser:
         try:
             resolved_database_path = self._resolve_database_path(database_path)
             self.database = pd.read_csv(resolved_database_path)
-            if self.database_length_limit is not None:
+            if self.database_length_limit is not None and len(self.database) > self.database_length_limit:
                 self.database = self.database.head(self.database_length_limit)
 
         except pd.errors.EmptyDataError as e:
@@ -157,28 +185,27 @@ class Analyser:
         """
         self.df_results.at[idx, "predictions"] = prediction
 
-
     def save_results(self, df: pd.DataFrame | None = None)-> None:
         if df is not None:
             self.df_results = df
         
-        dir_results_path = self.output_dir / f"df_results_{self.database_name}.csv"
+        dir_results_path = self.output_dir / f"{self.model_name.strip('/', 1)[1]}_{SHORT_DF_NAME.get(self.database_name, self.database_name)}.csv"
         
         # Salva o DataFrame completo com respostas e predições
         self.df_results.to_csv(dir_results_path, index=True)
-        print(f"Resultados salvos em: {dir_results_path}")
+        print(f"    ✓ Resultados salvos em: {dir_results_path}")
 
     def save_metrics(self, metrics: dict[str, float]) -> None:
-        metrics_path = self.output_dir / f"metrics_{self.database_name}.json"
+        metrics_path = self.output_dir / f"metrics_{self.model_name.strip('/', 1)[1]}_{SHORT_DF_NAME.get(self.database_name, self.database_name)}.json"
         with metrics_path.open("w", encoding="utf-8") as fh:
             fh.write(json.dumps(metrics, ensure_ascii=False, indent=2) + "\n")
-        print(f"Métricas salvas em: {metrics_path}")
+        print(f"    ✓ Métricas salvas em: {metrics_path}")
 
     def split_dataframe(
         self,
         dataframe: pd.DataFrame,
         text_column: str,
-        max_estimated_tokens: int = 5000,
+        max_estimated_tokens: int = 10000,
     ) -> list[pd.DataFrame]:
         dataframe = self.prepare_dataframe(dataframe, text_column)
         batches = []
@@ -280,23 +307,22 @@ class Analyser:
         results = self.df_results.dropna(subset=["predictions"]).copy()
         
         if len(results) == 0:
-            print("⚠ Nenhuma predição válida para calcular métricas.")
-            return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
+            print(" ⚠ Nenhuma predição válida para calcular métricas.")
+            return {"   precision": 0.0, "recall": 0.0, "f1": 0.0}
         
         # Converte para int puro para compatibilidade com sklearn
         y_true = results["answers"].astype(int).values
         y_pred = results["predictions"].astype(int).values
         
-        print(f"Calculando métricas com {len(results)} amostras...")
-        print(results.info())
+        print(f"    Calculando métricas com {len(results)} amostras...")
 
         precision = precision_score(y_true, y_pred, zero_division=0)
         recall = recall_score(y_true, y_pred, zero_division=0)
         f1 = f1_score(y_true, y_pred, zero_division=0)
 
-        print(f"Precision: {precision:.4f}")
-        print(f"Recall: {recall:.4f}")
-        print(f"F1-Score: {f1:.4f}")
+        print(f"    Precision: {precision:.4f}")
+        print(f"    Recall: {recall:.4f}")
+        print(f"    F1-Score: {f1:.4f}")
 
         return {"precision": precision, "recall": recall, "f1": f1}
     
@@ -304,7 +330,7 @@ class Analyser:
         elapsed_time = time.time() - self.__wait_time_llm_request__
         if elapsed_time < limit:
             wait_time = limit - elapsed_time
-            print(f"Aguardando {wait_time:.2f} segundos para a próxima requisição...")
+            print(f"\nAguardando {wait_time:.2f} segundos para a próxima requisição...")
             time.sleep(wait_time)
         self.__wait_time_llm_request__ = time.time()  # Reinicia o timer
         return True
@@ -335,24 +361,39 @@ class Analyser:
         
         return missing_ids
     
-def main():
+def main_analyser(model_name: str, base_prompt_name: str, bool_def: bool, df_text_column: str, database_name: str, database_length_limit: int | None = None, max_estimated_tokens: int = 17000):
+    """Fluxo principal do analisador
+    Parâmetros:
+- model_name: Nome do modelo LLM a ser usado para análise (deve estar presente em MODELS)
+- base_prompt_name: Nome do prompt base a ser usado presente em config_base
+- bool_def: Se True, adiciona a definição de fake news ao prompt base
+- df_text_column: Nome da coluna do DataFrame que contém o texto da notícia a ser analisada
+- database_name: Nome da base de dados a ser usada (deve estar presente em DATABASES_PATH)
+- database_length_limit: Limite opcional para o número de linhas da base de dados a ser processada (útil para testes)
+- max_estimated_tokens: Limite máximo de tokens estimados por batch para controle de tamanho do prompt enviado ao modelo
+    """
     #0. Cria um objeto analyser
-    analyser = Analyser(model_name="meta-llama/llama-4-scout-17b-16e-instruct", database_name="fake-recogna2", database_length_limit=500)
+    analyser = Analyser(model_name=model_name, base_prompt_name=base_prompt_name, bool_def=bool_def, database_name=database_name, database_length_limit=database_length_limit)
 
+    print("1. Preparando os dados")
     #1. Pegar as notícias que serão analisadas, juntar ao prompt base e enviar para o groq fazer análise.
     # 1.1 Separa as notícias em batches (se necessário) para não estourar limite de tokens do groq
-    clean_database = analyser.prepare_dataframe(analyser.database, text_column=TEXT_COLUMN)
-    batche_news = analyser.split_dataframe(clean_database, text_column=TEXT_COLUMN, max_estimated_tokens=17000)
+    clean_database = analyser.prepare_dataframe(analyser.database, text_column=df_text_column)
+    batch_news = analyser.split_dataframe(clean_database, text_column=df_text_column, max_estimated_tokens=max_estimated_tokens)
 
     # 1.2 Envia cada batch para o groq e salva as respostas completas
-    batch_prompts = analyser.build_prompt(text_column=TEXT_COLUMN, batch_df=batche_news)
+    batch_prompts = analyser.build_prompt(text_column=df_text_column, batch_df=batch_news)
 
     # 1.3 Inicializa df_results com as respostas esperadas (answers) usando o método
     analyser.set_answers(clean_database, answer_column="Classe")
     analyser.df_results["predictions"] = pd.NA
+    # Checkpoint: Dados preparados com sucesso.
+    print(f"    ✓ {len(batch_news)} batches preparados para análise (máx. {max_estimated_tokens} tokens estimados por batch).")
 
-    # 2. Envia o lote de prompts um de vada vez através de um loop.
-    for i, (batch_prompt, batch_news) in enumerate(zip(batch_prompts, batche_news)):
+
+    print("\n2. Enviando batches para análise")
+    # 2. Envia o lote de prompts um de cada vez através de um loop.
+    for i, (batch_prompt, batch_news) in enumerate(zip(batch_prompts, batch_news)):
         if i > 0:
             # Verifica se pode enviar a próxima requisiçao
             analyser.timer_check(limit=REQUESTINTERVAL)
@@ -396,15 +437,75 @@ def main():
             analyser.set_predictions(idx, pred)
 
         print(f"  Batch {i+1} concluído: {analyser.df_results['predictions'].notna().sum()} predições acumuladas (com NaN).")
-    
+    #checkpoint: Batches processados com sucesso.
+    print(" ✓ Todos os batches processados.")
+
+
+    print("\n3. Salvando resultados ")
     #3 Salva o DataFrame de resultados completo (respostas + predições)
     analyser.save_results()
+    
 
-    #2.3 Calcular métricas de avaliação (precision, recall, f1)
+    print("\n4. Calculando métricas de avaliação")
+    #4.1 Calcular métricas de avaliação (precision, recall, f1)
     metrics = analyser.compute_metrics()
 
-    #2.4 Salva as métricas
+    #4.2 Salva as métricas
     analyser.save_metrics(metrics)
+    print('\n✓ Análise concluída!\n')
+
+def main():
+    print("----- ANALISE 1: meta-lhama -----\n")
+    print("- Prompt: zero-shot\n")
+    main_analyser(
+        model_name="meta-llama/llama-4-scout-17b-16e-instruct",
+        base_prompt_name="zero-shot",
+        bool_def=False,
+        df_text_column="Titulo",
+        database_name=DATABASES_PATH["fake-recogna2"],
+        database_length_limit=100,
+        max_estimated_tokens=17000
+    )
+
+    print("----- FIM DA ANALISE 1 -----\n")
+"""
+    print("\n----- ANALISE 2: openai/gpt-oss-120b -----\n")
+    main_analyser(
+        model_name="openai/gpt-oss-120b",
+        base_prompt_name="zero-shot",
+        bool_def=False,
+        df_text_column="Titulo",
+        database_name=DATABASES_PATH["fake-recogna2"],
+        database_length_limit=100,
+        max_estimated_tokens=17000
+    )
+    print("----- FIM DA ANALISE 2 -----\n")
+
+    print("\n----- ANALISE 3: openai/gpt-oss-20b -----\n")
+    main_analyser(
+        model_name="openai/gpt-oss-20b",
+        base_prompt_name="zero-shot",
+        bool_def=False,
+        df_text_column="Titulo",
+        database_name=DATABASES_PATH["fake-recogna2"],
+        database_length_limit=100,
+        max_estimated_tokens=17000
+    )
+    print("----- FIM DA ANALISE 3 -----\n")
+
+
+    print("\n----- ANALISE 4: openai/gpt-oss-safeguard-20b -----\n")
+    main_analyser(
+        model_name="openai/gpt-oss-safeguard-20b",
+        base_prompt_name="zero-shot",
+        bool_def=False,
+        df_text_column="Titulo",
+        database_name=DATABASES_PATH["fake-recogna2"],
+        database_length_limit=100,
+        max_estimated_tokens=17000
+    )
+    print("----- FIM DA ANALISE 4 -----\n")
+"""
 
 if __name__ == "__main__":
     main()
