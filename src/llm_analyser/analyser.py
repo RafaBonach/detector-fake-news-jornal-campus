@@ -4,6 +4,7 @@ Analyzer para classificação de notícias usando modelos LLM via Groq.
 - Preenche com NaN as predições faltantes (sem retry)
 - Calcula métricas de avaliação (precision, recall, f1)
 """
+import re
 import pandas as pd
 import json
 import itertools
@@ -15,7 +16,7 @@ import time
 
 from sklearn.metrics import precision_score, recall_score, f1_score # Métricas de avaliação
 
-from config_base import MODELS, PROMPTS
+from config_base import MODELS, PROMPTS, MODELS_CONFIG, no_think
 from service_streamlit.utils import get_api_key
 
 from groq import Groq
@@ -25,10 +26,11 @@ load_dotenv()
 
 # Contantes
 REQUESTINTERVAL = 10  # Intervalo entre requisições em segundos
+JSON_VALIDATE_RETRY_WAIT = 60  # Espera antes de tentar novamente em caso de JSON inválido
 SHORT_DF_NAME = {
-    "fake-br": "FB",
-    "fake-recogna_no_removal_words": "FR1",
-    "fake-recogna2": "FR2"
+    "pre-processed_tratada.csv": "FB",
+    "FakeRecogna_no_removal_words_tratada.csv": "FR1",
+    "FakeRecogna_tratada.csv": "FR2"
 }
 DATABASES_PATH = {
     "fake-br": "pre-processed_tratada.csv",
@@ -82,6 +84,10 @@ class Analyser:
         if bool_def:
             self.base_prompt[0]["content"] += f"\n\n{PROMPTS['definition']}"
 
+        """
+        if self.model_name.startswith("openai/"):
+            self.base_prompt[0]["content"] += no_think
+        """
 
     def __set_database__(self, database_path: str):
         """
@@ -188,15 +194,23 @@ class Analyser:
     def save_results(self, df: pd.DataFrame | None = None)-> None:
         if df is not None:
             self.df_results = df
+
+        print(self.model_name)
+
+        results_name = re.match(r"[a-zA-Z]+", self.model_name).group()
+        results_name += f"_{SHORT_DF_NAME.get(self.database_name, self.database_name)}"
         
-        dir_results_path = self.output_dir / f"{self.model_name.strip('/', 1)[1]}_{SHORT_DF_NAME.get(self.database_name, self.database_name)}.csv"
+        dir_results_path = self.output_dir / f"{results_name}.csv"
         
         # Salva o DataFrame completo com respostas e predições
         self.df_results.to_csv(dir_results_path, index=True)
         print(f"    ✓ Resultados salvos em: {dir_results_path}")
 
     def save_metrics(self, metrics: dict[str, float]) -> None:
-        metrics_path = self.output_dir / f"metrics_{self.model_name.strip('/', 1)[1]}_{SHORT_DF_NAME.get(self.database_name, self.database_name)}.json"
+        metrics_name = "metrics_"
+        metrics_name += re.match(r"[a-zA-Z]+", self.model_name).group()
+        metrics_name += f"_{SHORT_DF_NAME.get(self.database_name, self.database_name)}"
+        metrics_path = self.output_dir / f"{metrics_name}.json"
         with metrics_path.open("w", encoding="utf-8") as fh:
             fh.write(json.dumps(metrics, ensure_ascii=False, indent=2) + "\n")
         print(f"    ✓ Métricas salvas em: {metrics_path}")
@@ -272,23 +286,65 @@ class Analyser:
 
         max_tokens = 1024 if expected_count is None else max(256, expected_count * 8)
 
-        response = groq_client.chat.completions.create(
-            messages=messages,
-            model=self.model_name,
-            temperature=0.0,
-            seed=42,
-            top_p=1,
-            max_tokens=max_tokens,
-            response_format={"type": "json_object"},
-        )
+        #DEBUG: Verificando o prompt enviado ao Groq
+        print(f"\n\n\nMensagem enviada ao Groq:\n{messages}\n\n\n")
 
-        content = response.choices[0].message.content.strip()
-        json_content = None
-        try:
-            json_content = json.loads(content)
-        except json.JSONDecodeError:
-            print(f"Erro ao decodificar resposta JSON: {content}")
-        return json_content
+        MAX_RETRIES = 2
+        count_400 = 0
+
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                response = groq_client.chat.completions.create(
+                    messages=messages,
+                    model=self.model_name,
+                    temperature=0.2,
+                    seed=42,
+                    top_p=1,
+                    # O max_completion_tokens deve ter no máximo a quantidade de tokens máximo de cada modelo.
+                    max_completion_tokens=8000,
+                    #response_format={"type": "json_object"},
+                )
+                content = response.choices[0].message.content.strip()
+                
+                #DEBUG: Verificando saída
+                print(f"\n\n\nResposta bruta do Groq:\n{content}\n\n\n")
+                try:
+                    return json.loads(content)
+                except json.JSONDecodeError:
+                    print(f"\nErro ao decodificar resposta JSON: {content}\n")
+                    return None
+            
+            except Exception as exc:
+                status_code = getattr(exc, "status_code", None)
+                error_message = str(exc)
+
+                #-- 400: json_validate_failed --
+                if status_code == 400 and "json_validate_failed" in error_message:
+                    count_400 += 1
+                    if count_400 < MAX_RETRIES:
+                        print(f"Erro 400 (tentativa {count_400}/{MAX_RETRIES}). "
+                          f"Aguardando 60s antes de tentar novamente...")
+                        time.sleep(60)
+                        continue
+                    print(f"\nErro 400 persistente após {MAX_RETRIES} tentativas. Abortando.\n")
+                    raise
+
+                #-- 429: rate_limit -- Lê o tempo de espera da mensagem --
+                elif status_code == 429 or "rate_limit" in error_message.lower() or "429" in error_message:
+                    wait_time = 60  # Valor padrão
+                    match = re.search(r"Please try again in \s+(\d+)\s*s", error_message, re.IGNORECASE)
+                    if match:
+                        wait_time = float(match.group(1))
+                    print(f"\nErro 429 (rate limit). Aguardando {wait_time}s antes de tentar novamente...\n")
+                    time.sleep(wait_time)
+                    continue
+
+                #-- Outros erros --
+                else:
+                    raise
+
 
     def extract_predictions(self, response: dict) -> list[int] | None:
         if not isinstance(response, dict):
@@ -394,21 +450,27 @@ def main_analyser(model_name: str, base_prompt_name: str, bool_def: bool, df_tex
     print("\n2. Enviando batches para análise")
     # 2. Envia o lote de prompts um de cada vez através de um loop.
     for i, (batch_prompt, batch_news) in enumerate(zip(batch_prompts, batch_news)):
-        if i > 0:
+        """if i > 0:
             # Verifica se pode enviar a próxima requisiçao
             analyser.timer_check(limit=REQUESTINTERVAL)
         else:
             analyser.__wait_time_llm_request__ = time.time()  # Inicia o timer para a primeira requisição
-
+"""
         collected_predictions: dict[int, int] = {}  # {índice_original: predição}
 
         print(f"Enviando batch {i+1}/{len(batch_prompts)} para o Groq...")
 
-        #2.1 Envia um batch de notícias
-        response = analyser.chat_groq(batch_prompt, expected_count=len(batch_news))
+        try:
+            #2.1 Envia um batch de notícias
+            response = analyser.chat_groq(batch_prompt, expected_count=len(batch_news))
 
-        #2.2 Extrair as predições do groq
-        predictions = analyser.extract_predictions(response)
+            #2.2 Extrair as predições do groq
+            predictions = analyser.extract_predictions(response)
+        
+        # Se a predição der erro, ele preenche as predições com None.
+        except Exception as exc:
+            print(f"  ✗ Erro ao processar batch {i+1}: {exc}")
+            predictions = None
 
         if predictions is None:
             print(f"  ✗ Resposta inválida para batch {i+1}. Preenchendo com NaN.")
@@ -455,19 +517,35 @@ def main_analyser(model_name: str, base_prompt_name: str, bool_def: bool, df_tex
     print('\n✓ Análise concluída!\n')
 
 def main():
-    print("----- ANALISE 1: meta-lhama -----\n")
-    print("- Prompt: zero-shot\n")
-    main_analyser(
-        model_name="meta-llama/llama-4-scout-17b-16e-instruct",
-        base_prompt_name="zero-shot",
-        bool_def=False,
-        df_text_column="Titulo",
-        database_name=DATABASES_PATH["fake-recogna2"],
-        database_length_limit=100,
-        max_estimated_tokens=17000
-    )
+    """
+    models_to_analyze = MODELS["groq"]
+    df_to_analyze = DATABASES_PATH.keys()
+    bases_to_analyze = PROMPTS["base"].keys()
+    params = {
+        "model_name": "",
+        "base_prompt_name": "zero-shot",
+        "bool_def": False,
+        "df_text_column": "Titulo",
+        "database_name": "",
+        "database_length_limit": 25,
+        "max_estimated_tokens": 17000
+    }
 
-    print("----- FIM DA ANALISE 1 -----\n")
+    for model_name in models_to_analyze:
+        print(f"\n----- ANALISE: {model_name} -----\n")
+        params["model_name"] = model_name
+        params["max_estimated_tokens"] = MODELS_CONFIG.get(model_name, {}).get("max_estimated_tokens", 7000)
+        
+        for df_name in df_to_analyze:
+            print(f"\n--- Base de dados: {df_name} ---\n")
+            params["df_text_column"] = "Titulo" if df_name != "fake-br" else "preprocessed_news"
+            params["database_name"] = DATABASES_PATH[df_name]
+            print("- Prompt: zero-shot\n")
+            main_analyser(**params)
+            print("\n")
+
+        print("----- FIM DA ANALISE -----\n")
+
 """
     print("\n----- ANALISE 2: openai/gpt-oss-120b -----\n")
     main_analyser(
@@ -476,11 +554,12 @@ def main():
         bool_def=False,
         df_text_column="Titulo",
         database_name=DATABASES_PATH["fake-recogna2"],
-        database_length_limit=100,
-        max_estimated_tokens=17000
+        database_length_limit=20,
+        max_estimated_tokens=7000
     )
     print("----- FIM DA ANALISE 2 -----\n")
 
+    """
     print("\n----- ANALISE 3: openai/gpt-oss-20b -----\n")
     main_analyser(
         model_name="openai/gpt-oss-20b",
@@ -505,7 +584,7 @@ def main():
         max_estimated_tokens=17000
     )
     print("----- FIM DA ANALISE 4 -----\n")
-"""
+    """
 
 if __name__ == "__main__":
     main()
