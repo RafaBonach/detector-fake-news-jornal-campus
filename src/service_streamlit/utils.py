@@ -2,6 +2,42 @@ from config_base import PROMPTS, MODELS
 import re
 import os
 
+def set_base_prompt(key_base: str = "campusito", bool_def: bool = False) -> list[dict[str, str]]:
+    """Configura o prompt base a ser usado na análise, com base em uma chave pré-definida.
+    Parâmetros:
+    - key_base: Chave do prompt base a ser usado (deve estar presente em PROMPTS['base'])
+    - bool_def: Se True, adiciona a definição de fake news ao prompt base
+    """
+    if key_base not in PROMPTS["base"]:
+        raise ValueError(f"Chave '{key_base}' não encontrada em PROMPTS['base']. Opções disponíveis: {list(PROMPTS['base'].keys())}")
+    
+    base_prompt = [
+        {
+            "role": "system",
+            "content": PROMPTS["base"][key_base]
+        }
+    ]
+
+    if bool_def:
+        base_prompt[0]["content"] += f"\n\n{PROMPTS['definition']}"
+
+    return base_prompt
+
+def update_prompt(base_prompt: list[dict[str, str]], question: str) -> list[dict[str, str]]:
+    """Atualiza o prompt base com a pergunta do usuário.
+    Parâmetros:
+    - base_prompt: O prompt base a ser atualizado (lista de mensagens)
+    - question: A pergunta do usuário a ser adicionada ao prompt
+    Retorna:
+    - Uma nova lista de mensagens contendo o prompt atualizado
+    """
+    updated_prompt = base_prompt.copy()
+    updated_prompt.append({
+        "role": "user",
+        "content": question
+    })
+    return updated_prompt
+
 def select_prompt(prompt_cat= None | str, prompt_typ= None | str) -> str:
     """Construtor de prompt baseado na categoria e no tipo.
     Argumentos:
