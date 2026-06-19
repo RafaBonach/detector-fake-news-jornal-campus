@@ -66,15 +66,15 @@ Levando em conta a velocidade da disceminação de desinformação e notícias f
     * Adicione sua chave de API (mais instruções  no arquivo de exemplo)
 
         ```dotenv
-        HUGGINGFACE_API_KEY="your_huggingface_api_key"
+        HUGGINGFACE_API_KEY=your_huggingface_api_key
 
-        GOOGLE_PROJECT_ID="your_google_project_id"
-        GOOGLE_API_KEY="your_google_api_key"
+        GOOGLE_PROJECT_ID=your_google_project_id
+        GOOGLE_API_KEY=your_google_api_key
 
-        GROQ_API_KEY="your_groq_api_key"
-        GROQ_API_KEY_ANALYSER="your_groq_api_key"
+        GROQ_API_KEY=your_groq_api_key
+        GROQ_API_KEY_ANALYSER=your_groq_api_key
 
-        OPENROUTER_API_KEY="your_openrouter_api_key"
+        OPENROUTER_API_KEY=your_openrouter_api_key
         ```
 
 5. **Configurando os prompts**
