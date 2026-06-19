@@ -97,15 +97,6 @@ def normalize_boolean_answer(answer) -> str:
 
     return "false"
 
-def select_model(model: dict) -> tuple[str, str]:
-    """Seleciona o modelo a ser utilizado com base no dicionário de modelos disponíveis.
-    Argumentos:
-        model (dict): O dicionário contendo as informações do modelo.
-    Retorna:
-        tuple: Uma tupla contendo o provedor e o modelo.
-    """
-    return str(model.key()), str(model.values())
-
 def get_models(key: str|None = None) -> list[str]:
     """Recupera a lista de modelos disponíveis a partir do dicionário MODELS.
     Retorna:
@@ -148,3 +139,15 @@ def get_api_key(provider: str) -> str:
 
 if __name__ == "__main__":
     print(select_prompt())
+
+
+
+# ------- OBSOLETAS ----------
+def select_model(model: dict) -> tuple[str, str]:
+    """Seleciona o modelo a ser utilizado com base no dicionário de modelos disponíveis.
+    Argumentos:
+        model (dict): O dicionário contendo as informações do modelo.
+    Retorna:
+        tuple: Uma tupla contendo o provedor e o modelo.
+    """
+    return str(model.key()), str(model.values())

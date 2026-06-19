@@ -1,22 +1,11 @@
 # bibliotecas de sistema
 import os
 import re
-import torch
 
-from service_streamlit.utils import set_base_prompt, update_prompt, select_prompt, remove_think, normalize_boolean_answer, get_api_key
+from service_streamlit.utils import set_base_prompt, update_prompt, get_api_key
 import config_base as config
 
-#from transformers import AutoModelForCausalLM, AutoTokenizer
 from groq import Groq
-
-#from google import genai
-
-from huggingface_hub import InferenceClient as InfClient
-
-from langchain_openrouter import ChatOpenRouter
-
-from langchain.agents import create_agent
-from langchain.chat_models import init_chat_model
 
 class LLMService:
     def __init__(self, model_name):
