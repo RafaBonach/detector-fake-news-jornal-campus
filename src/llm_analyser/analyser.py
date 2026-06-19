@@ -8,7 +8,6 @@ import re
 import pandas as pd
 import json
 import itertools
-import numpy as np
 from copy import deepcopy
 from pathlib import Path
 from dotenv import load_dotenv
@@ -16,7 +15,7 @@ import time
 
 from sklearn.metrics import precision_score, recall_score, f1_score # Métricas de avaliação
 
-from config_base import MODELS, PROMPTS, MODELS_CONFIG, no_think
+from config_base import PROMPTS
 from service_streamlit.utils import get_api_key
 
 from groq import Groq
@@ -283,8 +282,6 @@ class Analyser:
 
     def chat_groq(self, messages: list[dict], expected_count: int | None = None) -> list[dict] | None:
         groq_client = Groq(api_key=self.api_key)
-
-        max_tokens = 1024 if expected_count is None else max(256, expected_count * 8)
 
         #DEBUG: Verificando o prompt enviado ao Groq
         print(f"\n\n\nMensagem enviada ao Groq:\n{messages}\n\n\n")

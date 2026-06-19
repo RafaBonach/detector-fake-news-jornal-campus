@@ -3,7 +3,7 @@ from service_streamlit.llm import LLMService
 from service_streamlit.utils import get_models
 
 def show():
-    st.header(f"💬 Chatbot")
+    st.header("💬 Chatbot")
     st.markdown(
         '<p style="font-size: 1.1rem; line-height: 1.6;">'
         'O que achou do resultado da IA? Aconteceu algum erro? Acha que a IA classificou de forma errada?<br>'

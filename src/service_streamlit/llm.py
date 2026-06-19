@@ -1,7 +1,3 @@
-# bibliotecas de sistema
-import os
-import re
-
 from service_streamlit.utils import set_base_prompt, update_prompt, get_api_key
 import config_base as config
 
