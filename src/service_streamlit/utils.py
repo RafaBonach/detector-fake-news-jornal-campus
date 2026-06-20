@@ -1,5 +1,44 @@
-from config_base import PROMPTS
+from config_base import PROMPTS, MODELS
 import re
+import os
+
+import streamlit as st
+
+def set_base_prompt(key_base: str = "campusito", bool_def: bool = False) -> list[dict[str, str]]:
+    """Configura o prompt base a ser usado na análise, com base em uma chave pré-definida.
+    Parâmetros:
+    - key_base: Chave do prompt base a ser usado (deve estar presente em PROMPTS['base'])
+    - bool_def: Se True, adiciona a definição de fake news ao prompt base
+    """
+    if key_base not in PROMPTS["base"]:
+        raise ValueError(f"Chave '{key_base}' não encontrada em PROMPTS['base']. Opções disponíveis: {list(PROMPTS['base'].keys())}")
+    
+    base_prompt = [
+        {
+            "role": "system",
+            "content": PROMPTS["base"][key_base]
+        }
+    ]
+
+    if bool_def:
+        base_prompt[0]["content"] += f"\n\n{PROMPTS['definition']}"
+
+    return base_prompt
+
+def update_prompt(base_prompt: list[dict[str, str]], question: str) -> list[dict[str, str]]:
+    """Atualiza o prompt base com a pergunta do usuário.
+    Parâmetros:
+    - base_prompt: O prompt base a ser atualizado (lista de mensagens)
+    - question: A pergunta do usuário a ser adicionada ao prompt
+    Retorna:
+    - Uma nova lista de mensagens contendo o prompt atualizado
+    """
+    updated_prompt = base_prompt.copy()
+    updated_prompt.append({
+        "role": "user",
+        "content": question
+    })
+    return updated_prompt
 
 def select_prompt(prompt_cat= None | str, prompt_typ= None | str) -> str:
     """Construtor de prompt baseado na categoria e no tipo.
@@ -60,5 +99,60 @@ def normalize_boolean_answer(answer) -> str:
 
     return "false"
 
+def get_models(key: str|None = None) -> list[str]:
+    """Recupera a lista de modelos disponíveis a partir do dicionário MODELS.
+    Retorna:
+        list: Uma lista contendo os nomes dos modelos disponíveis.
+    """
+    if key:
+        model_options = MODELS.get(key, [])
+        model_options.sort()  # Ordena alfabeticamente
+        return model_options
+    
+    seen = set()
+    model_options = []
+    for models in MODELS.values():
+        for m in models:
+            if m not in seen:
+                seen.add(m)
+                model_options.append(m)
+    
+    model_options.sort()  # Ordena alfabeticamente
+    return model_options
+
+def get_api_key(provider: str) -> str:
+    """Recupera a chave de API para o provedor especificado.
+    Argumentos:
+        provider (str): O nome do provedor para o qual a chave de API é necessária.
+    Retorna:
+        str: A chave de API correspondente ao provedor.
+    """
+    
+    provider_keys = {
+        "groq": "GROQ_API_KEY",
+        "groq_analyser": "GROQ_API_KEY_ANALYSER",
+        "huggingface": "HUGGINGFACE_API_KEY",
+        "openrouter": "OPENROUTER_API_KEY",
+        "google": "GOOGLE_API_KEY",
+    }
+    
+    if provider not in provider_keys:
+        raise ValueError(f"Provedor desconhecido: {provider}. Opções disponíveis: {list(provider_keys.keys())}")
+    
+    secret_key = provider_keys[provider]
+    return st.secrets[secret_key]
+
 if __name__ == "__main__":
     print(select_prompt())
+
+
+
+# ------- OBSOLETAS ----------
+def select_model(model: dict) -> tuple[str, str]:
+    """Seleciona o modelo a ser utilizado com base no dicionário de modelos disponíveis.
+    Argumentos:
+        model (dict): O dicionário contendo as informações do modelo.
+    Retorna:
+        tuple: Uma tupla contendo o provedor e o modelo.
+    """
+    return str(model.key()), str(model.values())

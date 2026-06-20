@@ -24,3 +24,10 @@ Thumbs.db
 src/campus_multiplataforma_llm.egg-info/
 
 .coverage
+
+# Environment variable files
+.env
+.venv
+
+# streamlit secrets
+secrets.toml

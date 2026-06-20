@@ -22,12 +22,10 @@ build:
 	$(COMPOSE_COMMAND) build --no-cache
 bash:
 	$(COMPOSE_COMMAND) exec web bash
-migrate:
-	$(PYTHON_COMMAND) -m meridiano.migrate migrate
-run:
-	$(PYTHON_COMMAND) -m meridiano.run_briefing $(ARGS)
-check-ollama:
-	$(PYTHON_COMMAND) -m meridiano.ollama check_ollama
+run-web:
+	$(PYTHON_COMMAND) streamlit run src/streamlit_app.py
+run-analyse:
+	$(PYTHON_COMMAND) python src/llm_analyser/analyser.py
 
 lint:
 	uv run ruff check . 
@@ -35,10 +33,10 @@ lint:
 format:
 	uv run ruff check . --fix
 
-test: format
-	uv run pytest --cov=src/ tests/
+streamlit:
+	uv run streamlit run src/streamlit_app.py
 
-bare-run:
-	uv run python -m meridiano.run_briefing ${ARGS}
+analyse:
+	uv run python src/llm_analyser/analyser.py
 
-.PHONY: up down logs ps build bash migrate run app
+.PHONY: up down logs ps build bash migrate run app streamlit analyse
