@@ -1,0 +1,6 @@
+dotenv
+groq
+pandas
+pytest
+scikit-learn
+streamlit
