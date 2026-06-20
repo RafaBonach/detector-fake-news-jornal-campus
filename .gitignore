@@ -28,3 +28,6 @@ src/campus_multiplataforma_llm.egg-info/
 # Environment variable files
 .env
 .venv
+
+# streamlit secrets
+secrets.toml
