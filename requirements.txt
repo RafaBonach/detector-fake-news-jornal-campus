@@ -1,6 +1,6 @@
-dotenv
-groq
-pandas
-pytest
-scikit-learn
-streamlit
+dotenv>=0.9.9
+groq>=1.2.0
+pandas>=2.3.3
+pytest>=9.0.2
+scikit-learn>=1.8.0
+streamlit>=1.54.0
