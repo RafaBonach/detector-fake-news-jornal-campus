@@ -2,6 +2,8 @@ from config_base import PROMPTS, MODELS
 import re
 import os
 
+import streamlit as st
+
 def set_base_prompt(key_base: str = "campusito", bool_def: bool = False) -> list[dict[str, str]]:
     """Configura o prompt base a ser usado na análise, com base em uma chave pré-definida.
     Parâmetros:
@@ -125,17 +127,20 @@ def get_api_key(provider: str) -> str:
     Retorna:
         str: A chave de API correspondente ao provedor.
     """
-
-    if provider == "groq":
-        return os.getenv("GROQ_API_KEY")
-    elif provider == "groq_analyser":
-        return os.getenv("GROQ_API_KEY_ANALYSER")
-    elif provider == "huggingface":
-        return os.getenv("HUGGINGFACE_API_KEY")
-    elif provider == "openrouter":
-        return os.getenv("OPENROUTER_API_KEY")
-    else:
-        raise ValueError(f"Provedor desconhecido: {provider}")
+    
+    provider_keys = {
+        "groq": "GROQ_API_KEY",
+        "groq_analyser": "GROQ_API_KEY_ANALYSER",
+        "huggingface": "HUGGINGFACE_API_KEY",
+        "openrouter": "OPENROUTER_API_KEY",
+        "google": "GOOGLE_API_KEY",
+    }
+    
+    if provider not in provider_keys:
+        raise ValueError(f"Provedor desconhecido: {provider}. Opções disponíveis: {list(provider_keys.keys())}")
+    
+    secret_key = provider_keys[provider]
+    return st.secrets[secret_key]
 
 if __name__ == "__main__":
     print(select_prompt())
