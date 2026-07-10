@@ -120,7 +120,7 @@ def get_models(key: str|None = None) -> list[str]:
     model_options.sort()  # Ordena alfabeticamente
     return model_options
 
-def get_api_key(provider: str) -> str:
+def get_api_key(provider: str = "groq") -> str:
     """Recupera a chave de API para o provedor especificado.
     Argumentos:
         provider (str): O nome do provedor para o qual a chave de API é necessária.
@@ -130,10 +130,7 @@ def get_api_key(provider: str) -> str:
     
     provider_keys = {
         "groq": "GROQ_API_KEY",
-        "groq_analyser": "GROQ_API_KEY_ANALYSER",
-        "huggingface": "HUGGINGFACE_API_KEY",
-        "openrouter": "OPENROUTER_API_KEY",
-        "google": "GOOGLE_API_KEY",
+        "groq_analyser": "GROQ_API_KEY_ANALYSER"
     }
     
     if provider not in provider_keys:

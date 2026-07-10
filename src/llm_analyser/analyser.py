@@ -220,7 +220,7 @@ class Analyser:
         text_column: str,
         max_estimated_tokens: int = 10000,
     ) -> list[pd.DataFrame]:
-        dataframe = self.prepare_dataframe(dataframe, text_column)
+        #dataframe = self.prepare_dataframe(dataframe, text_column)
         batches = []
         current_positions = []
         current_estimated_tokens = 0
@@ -283,8 +283,8 @@ class Analyser:
     def chat_groq(self, messages: list[dict], expected_count: int | None = None) -> list[dict] | None:
         groq_client = Groq(api_key=self.api_key)
 
-        #DEBUG: Verificando o prompt enviado ao Groq
-        print(f"\n\n\nMensagem enviada ao Groq:\n{messages}\n\n\n")
+        #--------------------DEBUG: Verificando o prompt enviado ao Groq
+        #print(f"\n\n\nMensagem enviada ao Groq:\n{messages}\n\n\n")
 
         MAX_RETRIES = 2
         count_400 = 0
@@ -428,14 +428,17 @@ def main_analyser(model_name: str, base_prompt_name: str, bool_def: bool, df_tex
     #0. Cria um objeto analyser
     analyser = Analyser(model_name=model_name, base_prompt_name=base_prompt_name, bool_def=bool_def, database_name=database_name, database_length_limit=database_length_limit)
 
+
     print("1. Preparando os dados")
     #1. Pegar as notícias que serão analisadas, juntar ao prompt base e enviar para o groq fazer análise.
     # 1.1 Separa as notícias em batches (se necessário) para não estourar limite de tokens do groq
     clean_database = analyser.prepare_dataframe(analyser.database, text_column=df_text_column)
     batch_news = analyser.split_dataframe(clean_database, text_column=df_text_column, max_estimated_tokens=max_estimated_tokens)
 
+
     # 1.2 Envia cada batch para o groq e salva as respostas completas
     batch_prompts = analyser.build_prompt(text_column=df_text_column, batch_df=batch_news)
+
 
     # 1.3 Inicializa df_results com as respostas esperadas (answers) usando o método
     analyser.set_answers(clean_database, answer_column="Classe")
@@ -447,12 +450,6 @@ def main_analyser(model_name: str, base_prompt_name: str, bool_def: bool, df_tex
     print("\n2. Enviando batches para análise")
     # 2. Envia o lote de prompts um de cada vez através de um loop.
     for i, (batch_prompt, batch_news) in enumerate(zip(batch_prompts, batch_news)):
-        """if i > 0:
-            # Verifica se pode enviar a próxima requisiçao
-            analyser.timer_check(limit=REQUESTINTERVAL)
-        else:
-            analyser.__wait_time_llm_request__ = time.time()  # Inicia o timer para a primeira requisição
-"""
         collected_predictions: dict[int, int] = {}  # {índice_original: predição}
 
         print(f"Enviando batch {i+1}/{len(batch_prompts)} para o Groq...")
@@ -514,74 +511,18 @@ def main_analyser(model_name: str, base_prompt_name: str, bool_def: bool, df_tex
     print('\n✓ Análise concluída!\n')
 
 def main():
-    """
-    models_to_analyze = MODELS["groq"]
-    df_to_analyze = DATABASES_PATH.keys()
-    bases_to_analyze = PROMPTS["base"].keys()
-    params = {
-        "model_name": "",
-        "base_prompt_name": "zero-shot",
-        "bool_def": False,
-        "df_text_column": "Titulo",
-        "database_name": "",
-        "database_length_limit": 25,
-        "max_estimated_tokens": 17000
-    }
-
-    for model_name in models_to_analyze:
-        print(f"\n----- ANALISE: {model_name} -----\n")
-        params["model_name"] = model_name
-        params["max_estimated_tokens"] = MODELS_CONFIG.get(model_name, {}).get("max_estimated_tokens", 7000)
-        
-        for df_name in df_to_analyze:
-            print(f"\n--- Base de dados: {df_name} ---\n")
-            params["df_text_column"] = "Titulo" if df_name != "fake-br" else "preprocessed_news"
-            params["database_name"] = DATABASES_PATH[df_name]
-            print("- Prompt: zero-shot\n")
-            main_analyser(**params)
-            print("\n")
-
-        print("----- FIM DA ANALISE -----\n")
-
-"""
-    print("\n----- ANALISE 2: openai/gpt-oss-120b -----\n")
+    print("\n----- ANALISE: openai/gpt-oss-120b -----\n")
     main_analyser(
-        model_name="openai/gpt-oss-120b",
+        model_name="meta-llama/llama-4-scout-17b-16e-instruct",
         base_prompt_name="zero-shot",
         bool_def=False,
         df_text_column="Titulo",
         database_name=DATABASES_PATH["fake-recogna2"],
-        database_length_limit=20,
-        max_estimated_tokens=7000
+        database_length_limit=1000,
+        max_estimated_tokens=10000
     )
-    print("----- FIM DA ANALISE 2 -----\n")
+    print("----- FIM DA ANALISE -----\n")
 
-    """
-    print("\n----- ANALISE 3: openai/gpt-oss-20b -----\n")
-    main_analyser(
-        model_name="openai/gpt-oss-20b",
-        base_prompt_name="zero-shot",
-        bool_def=False,
-        df_text_column="Titulo",
-        database_name=DATABASES_PATH["fake-recogna2"],
-        database_length_limit=100,
-        max_estimated_tokens=17000
-    )
-    print("----- FIM DA ANALISE 3 -----\n")
-
-
-    print("\n----- ANALISE 4: openai/gpt-oss-safeguard-20b -----\n")
-    main_analyser(
-        model_name="openai/gpt-oss-safeguard-20b",
-        base_prompt_name="zero-shot",
-        bool_def=False,
-        df_text_column="Titulo",
-        database_name=DATABASES_PATH["fake-recogna2"],
-        database_length_limit=100,
-        max_estimated_tokens=17000
-    )
-    print("----- FIM DA ANALISE 4 -----\n")
-    """
 
 if __name__ == "__main__":
     main()

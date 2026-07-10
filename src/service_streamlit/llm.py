@@ -9,16 +9,6 @@ class LLMService:
         self.provider = None
         self.prompt_template = set_base_prompt() # Prompt Base
         self.api_key = None
-
-        # self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-    
-        """
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            torch_dtype="auto",
-            device_map="auto",
-        )
-        """
         
         self.__models_available__ = []
         self.__providers_available__ = {prov: None for prov in config.MODELS.keys()}
@@ -45,16 +35,7 @@ class LLMService:
         if self.provider is None:
             self.__select_provider__()
 
-        # debug
-        print(f"\n\n\nModelo {self.model_name} selecionado utilizando o provedor {self.provider}.\n\n\n")
-        
         self.api_key = get_api_key(self.provider)
-
-        # debug
-        if self.api_key is None:
-            print(f"\n\n\n⚠️ Atenção: Nenhuma chave de API encontrada para o provedor {self.provider}. Verifique as variáveis de ambiente.\n\n\n")
-        else:
-            print(f"\n\n\nUma chave de API foi encontrada para o provedor {self.provider}.\n\n\n")
 
         if self.provider == "groq":
             return self.call_groq(prompt)
