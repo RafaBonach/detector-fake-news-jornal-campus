@@ -9,11 +9,11 @@ license: agpl-3.0
 
 **Poderosa IA capaz de detectar fake news sobre assuntos gerais.**
 
-O Detector de Fake News do Campus Multiplataforma trata-se de um projeto de pesquisa que visa apoiar alunos de jornalismo e usuários do aplicativo Campus Multiplataforma a se informarem e conseguirem destinguir noticias reais de notícias falsas.
+O Detector de Fake News do Campus Multiplataforma trata-se de um projeto de pesquisa que visa apoiar alunos de jornalismo e usuários do aplicativo Campus Multiplataforma a se informarem e conseguirem destingir noticias reais de notícias falsas.
 
 ## Porque esse projeto existe?
 
-Levando em conta a velocidade da disceminação de desinformação e notícias falsas na rede, esse projeto foi desenvolvido visando ajudar as pessoas a reconhecer possiveis fake news que possam estar sendo disseminadas. O objetivo desse projeto é:
+Levando em conta a velocidade da disseminação de desinformação e notícias falsas na rede, esse projeto foi desenvolvido visando ajudar as pessoas a reconhecer possíveis fake news que possam estar sendo disseminadas. O objetivo desse projeto é:
 
 * Desmentir notícias falsas
 * Apoiar jornalistas na detecção de notícias falsas
@@ -26,9 +26,30 @@ Levando em conta a velocidade da disceminação de desinformação e notícias f
 * **AI APIs**:
     * Groq
 
+## Estrutura do projeto
+```
+src/
+├── streamlit_app.py          # Ponto de entrada do chatbot web
+├── presentation_streamlit/   # Interface (telas Streamlit)
+│   └── chat.py
+├── service_streamlit/        # Lógica de negócio do chatbot
+│   ├── llm.py                # Comunicação com a API da Groq
+│   └── utils.py              # Funções auxiliares (prompts, chaves, modelos)
+├── config/
+│   ├── prompts.py            # Prompts base usados pelo chatbot
+│   └── settings.py           # Lista de modelos disponíveis
+└── llm_benchmark/            # Script de avaliação/benchmark dos modelos
+    ├── main.py                # Ponto de entrada do benchmark
+    ├── prompt/builder.py
+    ├── llm/groq_client.py
+    ├── datasets/              # Carregamento e processamento dos dados de teste
+    ├── metrics/metrics.py     # Cálculo de métricas de desempenho
+    └── results/                # Tratamento e exportação dos resultados
+```
+
 ## Bora Começar
 
-**Prerequisitos**:
+**Prerrequisitos**:
 
 * Python 3.10 ou maior
 * Git (opcional, para clonar)
@@ -45,7 +66,7 @@ Levando em conta a velocidade da disceminação de desinformação e notícias f
     cd detector-fake-news-jornal-campus
     ```
 
-2. **Cria e ativa o ambiete virtual:**
+2. **Cria e ativa o ambiente virtual:**
 
     ```bash
     python -m venv venv
@@ -62,27 +83,23 @@ Levando em conta a velocidade da disceminação de desinformação e notícias f
     ```
 
 4. **Configura a chave de API**
-    * Copie `.env.exemple` em um arquivo chamado `.env` na raiz do projeto
+    * Copie [secrets.toml.exemple](.streamlit/secrets.toml.exemple) dentro do diretório [.streamlit](.streamlit/) em um arquivo chamado `secrets.toml` (crie a pasta `.streamlit` se ela não existir)
     * Adicione sua chave de API (mais instruções  no arquivo de exemplo)
 
-        ```dotenv
-        HUGGINGFACE_API_KEY=your_huggingface_api_key
-
-        GOOGLE_PROJECT_ID=your_google_project_id
-        GOOGLE_API_KEY=your_google_api_key
-
-        GROQ_API_KEY=your_groq_api_key
-        GROQ_API_KEY_ANALYSER=your_groq_api_key
-
-        OPENROUTER_API_KEY=your_openrouter_api_key
+        ```toml
+        # For use Groq
+        GROQ_API_KEY="your_groq_api_key"
+        GROQ_API_KEY_ANALYSER="your_groq_api_key" #chave usada pelo analisador.
         ```
+    > ⚠️ **IMPORTANTE:** A chave de api deve estar necessariamente entre parenteses ("chave_de_api").
 
 5. **Configurando os prompts**
-    * Reveja `src/config_base.py` para modificar os prompts.
+    * Reveja [src/config/prompts.py](src/config/prompts.py) para modificar os prompts usado pelo chatbot.
+    * Reveja [src/config/settings.py](src/config/settings.py) para modificar a lista de modelos disponíveis no seletor.
 
 ## Rodando a aplicação
 
-Esse projeto consiste em um servidor web (`src/stramlit_app.py`) para visualizar interagir com a LLM e um script (`src/llm_analyser/analyser.py`) para analisar o desempenho dos modelos.
+Esse projeto consiste em um servidor web ([src/streamlit_app.py](src/streamlit_app.py)) para interagir com a LLM e um módulo de benchmark ([src/llm_benchmark/](src/llm_benchmark/)) para analisar o desempenho dos modelos.
 
 * **Comandos:**
 
@@ -94,14 +111,6 @@ Esse projeto consiste em um servidor web (`src/stramlit_app.py`) para visualizar
         uv run streamlit run src/streamlit_app.py
         ```
 
-    * Analisador:
-        ```bash
-        # Usando Makefile
-        make analyse
-        # Usando comando direto
-        uv run python src/llm_analyser/analyser.py
-        ```
-
 ## Rodando no Docker
 
 Alternativamente a execução local, você pode rodar o projeto usando Docker.
@@ -110,7 +119,7 @@ O arquivo `Makefile` também possui comando que simplificação a inicializaçã
 
 **Comandos Make disponíveis:**
 
-* `make build`: Constroi a imagem Docker.
+* `make build`: Constrói a imagem Docker.
 * `make up`: Inicia a aplicação web.
 * `make run-web`: Roda a aplicação web no docker.
 * `make lint`: Roda o verificador de código.
@@ -137,7 +146,7 @@ Você pode encerrar a aplicação com `CTRL+C` na linha de comando momentos depo
 ## Licença
 Esse projeto está licenciado por **GNU Affero General Public License v3.0 (AGPLv3)**.
 
-Resumindo a licença, você pode modificar, distribuir esse software ou rodar uma versão moficada como um serviço de internet em que os usuário irão interagir com o software, você só **deve** disponibilizar o código-fonte completo correspondente à sua versão sob a licença AGPLv3.
+Resumindo a licença, você pode modificar, distribuir esse software ou rodar uma versão modificada como um serviço de internet em que os usuário irão interagir com o software, você só **deve** disponibilizar o código-fonte completo correspondente à sua versão sob a licença AGPLv3.
 
 Você pode ler o texto completo da licença aqui:
 [https://www.gnu.org/licenses/agpl-3.0.html](https://www.gnu.org/licenses/agpl-3.0.html)
