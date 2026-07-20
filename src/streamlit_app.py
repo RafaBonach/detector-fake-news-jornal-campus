@@ -1,16 +1,16 @@
 import streamlit as st
-from dotenv import load_dotenv
 
 from presentation_streamlit import chat
 
-# --- Setup ---
-load_dotenv()
-
 def main():
-    """Main Streamlit Application."""
+    """Ponto de entrada da aplicação Streamlit.
+    
+    Configura a página (título, ícone, layout), aplica ajustes de CSS para telas pequenas, inicializa o histórico de mensagens em st.session_state e delega o restante da interface para presentation_streamlit.chat.show().
+    """
+
     st.set_page_config(page_title="É verdade ou é mentira? Campusito Responde", page_icon="📰", layout="wide")
 
-    # CSS responsivo para celular
+    # Ajustes mínimos para melhorar a leitura em telas menores.
     st.markdown("""
     <style>
         @media (max-width: 768px) {
@@ -37,7 +37,7 @@ def main():
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    
+
     # Chatbot
     chat.show()
 
