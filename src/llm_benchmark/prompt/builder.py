@@ -1,13 +1,12 @@
 import config.prompts as PROMPTS
 
 class PromptBuilder:
-    def __init__(self, base_prompt_name: str, bool_def: bool = False):
+    def __init__(self, base_prompt_name: str):
         self.base_prompt_name = base_prompt_name
-        self.bool_def = bool_def
         self.__prompt__ = [
             {
                 "role": "system",
-                "content": PROMPTS.BASE[self.base_prompt_name] + ("\n\n" + PROMPTS.DEFINITION if self.bool_def else "")
+                "content": PROMPTS.BASE[self.base_prompt_name]
             }
         ]
 

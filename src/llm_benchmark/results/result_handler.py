@@ -19,7 +19,7 @@ class ResultHandler:
             else:
                 results[index] = (prediction, None)  # Caso não haja resposta do modelo
 
-        return pd.DataFrame.from_dict(results, orient="index", columns=["Previsão", "Resposta"])
+        return pd.DataFrame.from_dict(results, orient="index", columns=["Resposta", "Previsao"])
     
 if __name__ == "__main__":
     # Exemplo de uso da classe ResultHandler

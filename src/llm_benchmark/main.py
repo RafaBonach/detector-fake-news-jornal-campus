@@ -1,15 +1,49 @@
 """ --------------- Ainda falta calcular as métricas ---------------- """
-import time
+import re
 import pandas as pd
 from llm_benchmark.datasets.loader import DatasetLoader
 from llm_benchmark.datasets.processor import Processor
-from llm_benchmark.datasets.splitter import Splitter
 from llm_benchmark.prompt.builder import PromptBuilder
 from llm_benchmark.llm.groq_client import GroqClient
 from llm_benchmark.results.result_handler import ResultHandler
-from llm_benchmark.results.storage import Store
+from llm_benchmark.results.handler import Store
+from llm_benchmark.metrics.metrics import Metrics
 
 PREVISAO_COLUMN = "Classe"
+
+def __exception_handler__(exception: Exception) -> float | Exception:
+        """Essa função vai tratar os erros do groq
+        - 429 (rate_limit): retorna o tempo de espera
+        - 400 (json_validate_failed): retorna 60 segundos como tempo de espera
+        - outros erros: retorna a mensagem de erro"""
+        
+        status_code = getattr(exception, "status_code", None)
+        error_message = str(exception)
+
+        wait_time = float(60)
+
+        if status_code == 429:
+            match = re.search(r"Please try again in \s+(\d+)\s*s", error_message, re.IGNORECASE)
+            if match:
+                wait_time = float(match.group(1))
+                return wait_time
+            
+        elif status_code == 400 and "json_validate_failed" in error_message:
+            return wait_time
+        
+        else:
+            return exception
+
+def __save_metrics__(metrics: tuple[float, float, float], dataset_name: str) -> None:
+    """Salva as métricas em um arquivo CSV"""
+    df_metrics = pd.DataFrame([{
+        "precision": metrics[0],
+        "recall": metrics[1],
+        "f1_score": metrics[2]
+    }])
+    
+    df_metrics.to_csv(f"{dataset_name}_metrics.csv", index=False)
+    print(f"Métricas salvas em {dataset_name}_metrics.csv")
 
 def token_counter(prompt: list[dict[str, str]]) -> int:
     """Conta a quantidade de tokens aproximada um texto possui"""
@@ -18,18 +52,12 @@ def token_counter(prompt: list[dict[str, str]]) -> int:
 
     return estimated_tokens
 
-def benchmark():
+def benchmark(params: dict = None) -> str:
     """Função principal para executar o benchmark de LLMs."""
-    # 0. Parametros de configuração
-    params = {
-        "model_name": "meta-llama/llama-4-scout-17b-16e-instruct",
-        "base_prompt_name": "zero-shot",
-        "bool_def": False,
-        "df_text_column": "Titulo",
-        "database_name": "FakeRecogna_1.csv",
-        "top_p": 1,
-        "max_completion_tokens": 8192
-    }
+    # 0. Verifica existência de parâmetros obrigatórios
+    if {"model_name", "base_prompt_name", "df_text_column", "database_name", "top_p", "max_completion_tokens"} != params.keys():
+        raise ValueError("Parâmetros insuficientes fornecidos. Certifique-se de incluir 'model_name', 'base_prompt_name', 'df_text_column', 'database_name', 'top_p' e 'max_completion_tokens'.")
+    
 
     #1. Carrega dataset
     df = DatasetLoader(params["database_name"])
@@ -39,7 +67,7 @@ def benchmark():
 
     #2. Converte o dataframe em prompt.
     print(f"Processando o dataframe com {len(df_processed)} linhas.\n")
-    prompt_builder = PromptBuilder(params["base_prompt_name"], params["bool_def"])
+    prompt_builder = PromptBuilder(params["base_prompt_name"])
     
     prompt_builder.add_prompts(df_processed[params["df_text_column"]].tolist())
 
@@ -56,24 +84,120 @@ def benchmark():
     #3. Envia o prompt para o modelo
     groq_client = GroqClient(params["model_name"])
     response = groq_client.chat_groq(prompt, params)
-
-    print(f"Resposta do modelo: {response}")
     
     #4. Tratar a resposta do modelo
     result_handler = ResultHandler()
     if not isinstance(response, Exception):
         prevision = {index: row[PREVISAO_COLUMN] for index, row in df_processed.iterrows()}
         results = result_handler.process_results(prevision, response)
-        print(f"Resultados do chunk: {results.head()}")
 
         #5. Salvar resultados em um arquivo CSV
-        storage = Store(f"{params['database_name'].replace('.csv', '')}_results")
+        storage = Store(f"{params['database_name'].rsplit('_', 1)[0]}_results")
         storage.save_results(results)
-
-        #6. Calcular as métricas
-        """ --------------- Ainda falta calcular as métricas ---------------- """
+    else:
+        raise response
 
     return "Benchmark executado com sucesso!"
 
+def metrics(dataset_name: str = None):
+    """Função para calcular métricas de avaliação do modelo."""
+
+    # Implementar cálculo de métricas como acurácia, precisão, recall, F1-score, etc.
+    if dataset_name is None:
+        raise ValueError("Nome do dataset não fornecido para cálculo de métricas.")
+    
+    store = Store(dataset_name)
+    df_results = store.get_results()
+
+    if df_results is None:
+        raise ValueError(f"Não há resultados armazenados para o dataset '{dataset_name}'.")
+
+    # Verifica o tipo das colunas e converte para float se necessário
+    if df_results["Resposta"].dtype != float:
+        df_results["Resposta"] = pd.to_numeric(df_results["Resposta"], errors='coerce')
+    if df_results["Previsao"].dtype != float:
+        df_results["Previsao"] = pd.to_numeric(df_results["Previsao"], errors='coerce')
+
+    # Remove as linhas que tiverem nan
+    df_results = df_results.dropna(subset=["Resposta", "Previsao"])
+
+    '''
+    (y_true, y_pred) = (df_results["Resposta"].values, df_results["Previsao"].values)
+    print(f"Resultados carregados para cálculo de métricas:\n{y_true}\n{y_pred}")
+    '''
+    metrics = Metrics(df_results)
+
+    results = [metrics.calculate_precision(), metrics.calculate_recall(), metrics.calculate_f1_score()]
+
+    # Calculo da precisão:
+    print(f"Precisão: {results[0]}")
+    # Calculo do recall:
+    print(f"Recall: {results[1]}")
+    # Calculo do F1-score:
+    print(f"F1-score: {results[2]}")
+
+    __save_metrics__(results, dataset_name)
+
+    
+
 if __name__ == "__main__":
-    print(benchmark())
+    """
+    * Zero-shot - fakerecogna - meta-llama concluido.
+
+    """
+    
+    params = {
+        "model_name": "groq/compound",
+        "base_prompt_name": "GKP",
+        "df_text_column": "Noticia",
+        "top_p": 1,
+        "max_completion_tokens": 8192
+    }
+    '''
+    #params["database_name"] = "FakeRecogna_2.csv"
+
+    for i in range(1, 10):
+        params["database_name"] = f"FakeRecogna_{i}.csv"
+
+        #debug
+        print(f"Processando o chunk {i} com o arquivo {params['database_name']}...\n")
+        
+        max_attempts = 2
+
+        for attempt in range(max_attempts):
+            try:
+                bm_result = benchmark(params)
+
+                # debug
+                print(f"Chunk {i} processado com sucesso na tentativa {attempt + 1}.\n")
+                time.sleep(1)  # Pequena pausa antes de processar o próximo chunk
+
+                break
+            except Exception as e:
+                
+                #debug
+                print(f"Erro ao processar o chunk {i} na tentativa {attempt + 1}: {e}\n")
+
+
+                wait_time = __exception_handler__(e)
+
+                
+                if not isinstance(wait_time, float):
+                    break
+
+                if attempt < max_attempts - 1:
+                    print(f"Aguardando {wait_time} segundos antes de tentar novamente...")
+                    time.sleep(wait_time)
+            
+        else:
+            print("Todas as tentativas falharam.")
+            break
+
+    print(f"Benchmark concluído com sucesso! {i} chunks processados.\n")
+
+    
+    '''
+    # Calcular as métricas
+    """ --------------- Ainda falta calcular as métricas ---------------- """
+    metrics("FakeRecogna_results")
+    
