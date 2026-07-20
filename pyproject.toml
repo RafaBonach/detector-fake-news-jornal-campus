@@ -6,7 +6,6 @@ readme = "README.md"
 authors = [{ name = "Lucas Zawacki", email = "lfzawacki@gmail.com" }]
 requires-python = ">=3.13"
 dependencies = [
-    "dotenv>=0.9.9",
     "groq>=1.2.0",
     "pandas>=2.3.3",
     "pytest>=9.0.2",
