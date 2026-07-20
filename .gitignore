@@ -31,3 +31,6 @@ src/campus_multiplataforma_llm.egg-info/
 
 # streamlit secrets
 secrets.toml
+
+# Analizador de dependencias
+.ruff_cache/
