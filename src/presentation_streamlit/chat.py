@@ -10,22 +10,42 @@ from campus_multiplataforma_llm.chat_service import get_available_models
 from service_streamlit.llm import LLMService
 
 def show():
-    """Renderiza e gerencia a tela principal de chat no Streamlit.
-
-    A função mantém o estado conversacional em ``st.session_state``, exibe o
-    seletor de modelo e delega a geração de resposta para ``LLMService``.
-
-    Returns:
-        None.
-
-    Raises:
-        Exception: Exceções do serviço de LLM são capturadas e exibidas na UI,
-        sem interromper a renderização da página.
+    """Renderiza a tela principal do chatbot no Streamlit."
+    
+    Responsabilidades:
+        - Exibe o cabeçalho, aviso de feedback e seletor de modelo.
+        - Mantém o histórico de mensagens em st.session_state.messages.
+        - Ao receber uma pergunta, cria (ou reaproveita) uma instância de LLMService para o modelo selecionado e exibe a resposta.
+        - Oferece um botão para limpar a conversa.
+        
+    Não recebe parâmetros nem retorna valor: toda a comunicação com o resto do app acontece via st.session_state.
+    
+    Observação:
+        O chat é habilitado depois que o usuário escolhe um modelo diferente de "" no seletor.
     """
     
+    st.markdown(
+        """
+        <style>
+            @media (max-width: 480px) {
+                div[data-testid="stHeadingWithActionElements"] h2 {
+                    font-size: 0.3rem !important;
+                    line-height: 0.7 !important;
+                }
+            }
+            @media (max-width: 380px) {
+                div[data-testid="stHeadingWithActionElements"] h2 {
+                    font-size: 0.5rem !important;
+                }
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.header("💬 Chatbot")
     st.markdown(
-        '<p style="font-size: 1.1rem; line-height: 1.6;">'
+        '<p style="font-size: 0.95rem; line-height: 1.3;">'
         'O que achou do resultado da IA? Aconteceu algum erro? Acha que a IA classificou de forma errada?<br>'
         '<a href="https://forms.gle/jygcee81PYFpYa8UA" target="_blank">Clique aqui para deixar seu feedback aqui</a>.'
         '</p>',
