@@ -1,3 +1,9 @@
+"""Catálogo de prompts base do projeto.
+
+Este módulo concentra instruções textuais usadas tanto pela aplicação de
+chat quanto pelos fluxos de benchmark.
+"""
+
 pt_br = " Responda exclusivamente em português brasileiro. Nunca responda em inglês."
 
 n_noticias = 102

@@ -3,6 +3,10 @@
 Este arquivo centraliza a lista de modelos suportados e os limites
 estimados de tokens usados pelo restante da aplicação para seleção,
 dimensionamento de contexto e validações operacionais.
+
+Attributes:
+    MODELS: Catálogo de modelos permitidos para interface e API.
+    MODELS_CONFIG: Metadados operacionais por modelo.
 """
 
 # Modelos disponíveis por provedor.

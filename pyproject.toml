@@ -6,16 +6,23 @@ readme = "README.md"
 authors = [{ name = "Lucas Zawacki", email = "lfzawacki@gmail.com" }]
 requires-python = ">=3.13"
 dependencies = [
+    "fastapi>=0.116.1",
     "groq>=1.2.0",
     "pandas>=2.3.3",
     "pytest>=9.0.2",
     "scikit-learn>=1.8.0",
     "streamlit>=1.54.0",
+    "uvicorn>=0.35.0",
 ]
 
 [build-system]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["*"]
+namespaces = true
 
 [dependency-groups]
 dev = ["coverage>=7.13.0", "pytest>=9.0.2", "pytest-cov>=7.0.0", "ruff>=0.14.9"]

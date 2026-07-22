@@ -29,23 +29,52 @@ Levando em conta a velocidade da disseminação de desinformação e notícias f
 ## Estrutura do projeto
 ```
 src/
-├── streamlit_app.py          # Ponto de entrada do chatbot web
-├── presentation_streamlit/   # Interface (telas Streamlit)
+├── campus_multiplataforma_llm/      # Camada pública reutilizável (biblioteca)
+│   ├── __init__.py
+│   └── chat_service.py              # Serviço de chat usado por app externo e API
+├── campus_multiplataforma_llm_api/   # Camada pública HTTP (FastAPI)
+│   ├── main.py                       # Endpoints /health, /models e /chat
+│   └── schemas.py                    # Contratos de entrada e saída da API
+├── streamlit_app.py                  # Ponto de entrada do chatbot web (UI)
+├── presentation_streamlit/           # Interface (telas Streamlit)
 │   └── chat.py
-├── service_streamlit/        # Lógica de negócio do chatbot
-│   ├── llm.py                # Comunicação com a API da Groq
-│   └── utils.py              # Funções auxiliares (prompts, chaves, modelos)
+├── service_streamlit/                # Adaptadores do Streamlit
+│   ├── llm.py                        # Wrapper para a camada pública
+│   └── utils.py                      # Leitura de segredos e utilitários de UI
 ├── config/
-│   ├── prompts.py            # Prompts base usados pelo chatbot
-│   └── settings.py           # Lista de modelos disponíveis
-└── llm_benchmark/            # Script de avaliação/benchmark dos modelos
-    ├── main.py                # Ponto de entrada do benchmark
+│   ├── prompts.py                    # Prompts base usados pelo chatbot
+│   └── settings.py                   # Lista de modelos disponíveis
+└── llm_benchmark/                    # Módulo interno de benchmark (não é recurso da API)
+    ├── main.py                       # Ponto de entrada do benchmark
     ├── prompt/builder.py
     ├── llm/groq_client.py
-    ├── datasets/              # Carregamento e processamento dos dados de teste
-    ├── metrics/metrics.py     # Cálculo de métricas de desempenho
-    └── results/                # Tratamento e exportação dos resultados
+    ├── datasets/                     # Carregamento e processamento dos dados de teste
+    ├── metrics/metrics.py            # Cálculo de métricas de desempenho
+    └── results/                      # Tratamento e exportação dos resultados
 ```
+
+## Fluxo de integração
+
+```mermaid
+flowchart LR
+    A[Aplicativo cliente] -->|HTTP JSON| B[API FastAPI<br/>campus_multiplataforma_llm_api]
+    B -->|chama| C[ChatService<br/>campus_multiplataforma_llm]
+    C -->|requisição LLM| D[Groq API]
+    D -->|resposta| C
+    C -->|payload padronizado| B
+    B -->|JSON| A
+
+    E[Streamlit UI] -->|wrapper| C
+```
+
+Resumo do fluxo:
+
+1. O aplicativo cliente envia uma mensagem para o endpoint `/chat`.
+2. A API valida payload/modelo e resolve a chave da Groq.
+3. A API delega a geração da resposta ao `ChatService`.
+4. O `ChatService` conversa com a Groq e retorna resposta estruturada.
+5. A API devolve JSON para o aplicativo cliente.
+6. A interface Streamlit também usa o mesmo `ChatService`, mas não passa pela API HTTP.
 
 ## Bora Começar
 
@@ -93,6 +122,8 @@ src/
         ```
     > ⚠️ **IMPORTANTE:** A chave de api deve estar necessariamente entre parenteses ("chave_de_api").
 
+    > A aplicação Streamlit e a API HTTP usam as chaves deste arquivo `.streamlit/secrets.toml`.
+
 5. **Configurando os prompts**
     * Reveja [src/config/prompts.py](src/config/prompts.py) para modificar os prompts usado pelo chatbot.
     * Reveja [src/config/settings.py](src/config/settings.py) para modificar a lista de modelos disponíveis no seletor.
@@ -110,6 +141,142 @@ Esse projeto consiste em um servidor web ([src/streamlit_app.py](src/streamlit_a
         # Usando comando direto
         uv run streamlit run src/streamlit_app.py
         ```
+
+## Integração Como Biblioteca
+
+O projeto agora expõe uma camada pública em `campus_multiplataforma_llm` para uso por outros aplicativos Python.
+
+Exemplo mínimo:
+
+```python
+from campus_multiplataforma_llm import ChatService
+
+service = ChatService(
+    model_name="groq/compound",
+    api_key="sua-chave-da-groq",
+)
+
+response = service.ask(
+    "Essa notícia é verdadeira ou falsa?",
+    history=[{"role": "user", "content": "Notícia anterior"}],
+)
+
+print(response.content)
+```
+
+O objeto retornado por `ask()` contém o texto final da resposta, o nome do modelo usado e as mensagens enviadas ao provedor. Isso facilita integrar o chat em outro frontend sem depender de `st.session_state`.
+
+## Integração Via API HTTP
+
+Além da integração por biblioteca, o projeto também expõe uma API HTTP usando FastAPI.
+
+### Subir a API
+
+```bash
+# Usando Makefile
+make api
+
+# Ou diretamente
+uv run uvicorn campus_multiplataforma_llm_api.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Variáveis de ambiente
+
+- `GROQ_API_KEY`: opcional. Se não estiver no ambiente, a API tentará ler a chave em `.streamlit/secrets.toml`
+- `LLM_DEFAULT_MODEL`: opcional (define modelo padrão)
+- `CORS_ALLOW_ORIGINS`: opcional, lista separada por vírgula (ex.: `http://localhost:3000,http://localhost:5173`)
+
+### Origem da chave da API
+
+Para funcionar corretamente em desenvolvimento, crie o arquivo `.streamlit/secrets.toml` com base no arquivo `.streamlit/secrets.toml.exemple` e preencha as chaves da Groq.
+
+Ordem de resolução da chave no endpoint `/chat`:
+
+1. Variável de ambiente `GROQ_API_KEY` (quando definida).
+2. Campo `GROQ_API_KEY` no arquivo `.streamlit/secrets.toml`.
+
+Se nenhuma dessas fontes estiver disponível, a API responderá erro informando ausência de chave.
+
+### Endpoints
+
+- `GET /health`
+- `GET /models`
+- `POST /chat`
+
+Exemplo de resposta `GET /health`:
+
+```json
+{
+    "status": "ok",
+    "api_key_configured": true
+}
+```
+
+Exemplo de resposta `GET /models`:
+
+```json
+{
+    "models": [
+        "groq/compound",
+        "groq/compound-mini",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "openai/gpt-oss-safeguard-20b"
+    ],
+    "default_model": "groq/compound"
+}
+```
+
+Exemplo de requisição:
+
+```bash
+curl -X POST "http://localhost:8000/chat" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "message": "Essa notícia é verdadeira ou falsa?",
+        "model_name": "groq/compound",
+        "history": [
+            {"role": "user", "content": "Mensagem anterior"}
+        ]
+    }'
+```
+
+Exemplo de resposta `POST /chat`:
+
+```json
+{
+    "response": "Classificação: VERDADEIRA\nJustificativa: ...",
+    "model_name": "groq/compound",
+    "messages": [
+        {
+            "role": "system",
+            "content": "...prompt base..."
+        },
+        {
+            "role": "user",
+            "content": "Mensagem anterior"
+        },
+        {
+            "role": "user",
+            "content": "Essa notícia é verdadeira ou falsa?"
+        }
+    ]
+}
+```
+
+### Erros possíveis no endpoint `/chat`
+
+| HTTP Status | Código (`detail.error`) | Quando ocorre | Exemplo simplificado de resposta |
+|---|---|---|---|
+| 400 | `invalid_model` | Quando `model_name` não está na lista de modelos suportados. | `{"detail": {"error": "invalid_model", "message": "Modelo informado não é suportado.", "available_models": ["..."]}}` |
+| 500 | `missing_api_key` | Quando a API não encontra chave nem em `GROQ_API_KEY` nem em `.streamlit/secrets.toml`. | `{"detail": {"error": "missing_api_key", "message": "Defina GROQ_API_KEY no ambiente ou em .streamlit/secrets.toml para usar o endpoint /chat."}}` |
+| 502 | `llm_provider_error` | Quando o provedor LLM retorna erro durante a geração da resposta. | `{"detail": {"error": "llm_provider_error", "message": "...mensagem de erro do provedor..."}}` |
+
+### Escopo da API
+
+O diretório `src/llm_benchmark/` é destinado a benchmarking e testes internos de modelos.
+
+Ele **não** faz parte da API HTTP pública e não deve ser tratado como recurso de integração do aplicativo cliente.
 
 ## Rodando no Docker
 

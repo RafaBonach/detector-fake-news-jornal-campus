@@ -1,11 +1,22 @@
+"""Ponto de entrada da interface Streamlit do projeto.
+
+Este módulo configura a página principal, inicializa o estado da sessão
+e delega a renderização do chat para a camada de apresentação.
+"""
+
 import streamlit as st
 
 from presentation_streamlit import chat
 
 def main():
-    """Ponto de entrada da aplicação Streamlit.
-    
-    Configura a página (título, ícone, layout), aplica ajustes de CSS para telas pequenas, inicializa o histórico de mensagens em st.session_state e delega o restante da interface para presentation_streamlit.chat.show().
+    """Inicializa e renderiza a aplicação Streamlit.
+
+    A função define metadados da página, aplica ajustes visuais para telas
+    menores, garante a inicialização do histórico de mensagens e exibe o
+    componente de conversa.
+
+    Returns:
+        None.
     """
 
     st.set_page_config(page_title="É verdade ou é mentira? Campusito Responde", page_icon="📰", layout="wide")

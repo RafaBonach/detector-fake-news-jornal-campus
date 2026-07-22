@@ -6,22 +6,21 @@ e encaminha as perguntas do usuário para o serviço de LLM.
 
 import streamlit as st
 
+from campus_multiplataforma_llm.chat_service import get_available_models
 from service_streamlit.llm import LLMService
-from service_streamlit.utils import get_models
 
 def show():
-    """Renderiza a tela principal do chatbot no Streamlit."
-    
-    Responsabilidades:
-        - Exibe o cabeçalho, aviso de feedback e seletor de modelo.
-        - Mantém o histórico de mensagens em st.session_state.messages.
-        - Ao receber uma pergunta, cria (ou reaproveita) uma instância de LLMService para o modelo selecionado e exibe a resposta.
-        - Oferece um botão para limpar a conversa.
-        
-    Não recebe parâmetros nem retorna valor: toda a comunicação com o resto do app acontece via st.session_state.
-    
-    Observação:
-        O chat é habilitado depois que o usuário escolhe um modelo diferente de "" no seletor.
+    """Renderiza e gerencia a tela principal de chat no Streamlit.
+
+    A função mantém o estado conversacional em ``st.session_state``, exibe o
+    seletor de modelo e delega a geração de resposta para ``LLMService``.
+
+    Returns:
+        None.
+
+    Raises:
+        Exception: Exceções do serviço de LLM são capturadas e exibidas na UI,
+        sem interromper a renderização da página.
     """
     
     st.header("💬 Chatbot")
@@ -38,7 +37,7 @@ def show():
         st.session_state.selected_model = ""
 
     # A opção vazia força a escolha explícita do usuário.
-    model_options = [""] + get_models()
+    model_options = [""] + get_available_models()
 
     with st.container(border=True):
         st.selectbox("Selecione um modelo", model_options, key="selected_model")
@@ -56,6 +55,7 @@ def show():
     # O chat só fica ativo depois da escolha do modelo.
     if model != "":
         if prompt := st.chat_input("Faça uma pergunta..."):
+            history = st.session_state.messages.copy()
             st.chat_message("user").write(prompt)
             st.session_state.messages.append({"role": "user", "content": prompt})
 
@@ -69,7 +69,7 @@ def show():
                         st.session_state.llm_service = LLMService(model_name=str(model))
 
                     try:
-                        response = st.session_state.llm_service.answer_question(prompt)
+                        response = st.session_state.llm_service.answer_question(prompt, history=history)
                     except Exception as exc:
                         response = f"Erro ao gerar resposta: {exc}"
                         st.error(response)

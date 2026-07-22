@@ -1,67 +1,44 @@
-"""Serviço responsável pela comunicação com o provedor de LLM.
+"""Compatibilidade com a camada Streamlit.
 
-O módulo monta o prompt, envia a requisição ao modelo e devolve a
-resposta final para a camada de interface.
+Este wrapper preserva a API existente enquanto delega a lógica para a
+camada pública reutilizável.
 """
 
-from groq import Groq
+from campus_multiplataforma_llm.chat_service import ChatService
 
-from service_streamlit.utils import get_api_key, set_base_prompt, update_prompt
+from service_streamlit.utils import get_api_key
 
 class LLMService:
-    """Serviço que encapsula a comunicação com  provedor de LLM (Groq).
-    
-    Cada instância representa uma "sessão" configurada para um modelo específico: monta o prompt inicial, guarda a chave de API e expões o método `answer_question` para gerar respostas a partir de perguntas do usuário.
-    """
-    def __init__(self, model_name: str):
-        """Inicializa o serviço com o modelo selecionado pelo usuário."""
+    """Ponte de compatibilidade entre Streamlit e a camada pública de chat."""
 
-        self.model_name = model_name
-        self.prompt_template = set_base_prompt()
-        self.__api_key__ = get_api_key()
-    
-    def __chat_groq__(self, messages: list[dict[str, str]] | str, params: dict = None) -> str:
-        """Envia as mensagens para a API Groq e retorna o texto gerado.
-        
+    def __init__(self, model_name: str):
+        """Inicializa o serviço de UI com o modelo selecionado.
+
         Args:
-            messages: Histórico de mensagens no formato esperado pela API (lista de dicts com "role" e "content"), ou uma string única.
-            params: Parâmetros opcionais da camada. Chaves aceitas:
-                - "top_p": controla a diversidade da resposta (padrão: 1)
-                - "max_completion_tokens": limite de tokens na resposta (padrão: 4700)
-                
-        Returns:
-            O texto da resposta gerada pelo modelo, já sem espaços extras.
-            
+            model_name: Nome do modelo escolhido pelo usuário na interface.
+
         Raises:
-            Exception: Repassa ualquer erro da API do Groq (rede, autenticação, limite de uso, etc.) após registrar no log.
+            ValueError: Quando a chave de API não está disponível nos segredos
+            do Streamlit.
         """
 
-        groq_client = Groq(api_key=self.__api_key__)
+        self.model_name = model_name
+        self.__api_key__ = get_api_key()
+        self._chat_service = ChatService(model_name=model_name, api_key=self.__api_key__)
 
-        try:
-            response = groq_client.chat.completions.create(
-                messages=messages,
-                model=self.model_name,
-                seed=42,
-                top_p=params.get("top_p") if params and "top_p" in params else 1,
-                max_completion_tokens=params.get("max_completion_tokens") if params and "max_completion_tokens" in params else 4700,
-            )
+    def answer_question(self, user_question, history=None, params=None):
+        """Encaminha a pergunta para a camada pública de chat.
 
-            content_response = response.choices[0].message.content.strip()
-            return content_response
-        except Exception as e:
-            print(f"Erro ao enviar mensagem para o Groq: {e}")
-            raise e
+        Args:
+            user_question: Pergunta atual do usuário.
+            history: Histórico opcional de mensagens no formato de chat.
+            params: Parâmetros opcionais para a chamada ao provedor.
 
-    def answer_question(self, user_question):
-        """Monta o prompt final, chama o modelo e devolve a resposta."""
+        Returns:
+            str: Texto da resposta gerada pelo modelo.
 
-        prompt = update_prompt(self.prompt_template, user_question)
+        Raises:
+            Exception: Repropaga exceções da chamada ao serviço de LLM.
+        """
 
-        answer = self.__chat_groq__(prompt)
-
-        if isinstance(answer, ValueError):
-            print("Erro ao chamar o modelo LLM:", answer)
-            raise answer
-        
-        return answer
+        return self._chat_service.answer_question(user_question, history=history, params=params)

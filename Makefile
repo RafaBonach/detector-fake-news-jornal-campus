@@ -1,10 +1,7 @@
-# Load environment variables from .env file if it exists or use .env.example as fallback
+# Load environment variables from .env only when the file exists.
 ifneq (,$(wildcard .env))
-    include .env
-    export $(shell sed 's/=.*//' .env)
-else
-    include .env.example
-    export $(shell sed 's/=.*//' .env.example)
+	include .env
+	export $(shell sed -n 's/=.*//' .env)
 endif
 
 COMPOSE_COMMAND= docker compose --env-file .env -f compose.yml
@@ -36,7 +33,12 @@ format:
 streamlit:
 	uv run streamlit run src/streamlit_app.py
 
+api:
+	@GROQ_KEY=$$(grep -E '^GROQ_API_KEY=' .streamlit/secrets.toml 2>/dev/null | head -n1 | cut -d'=' -f2- | tr -d '"'); \
+	if [ -n "$$GROQ_KEY" ]; then export GROQ_API_KEY="$$GROQ_KEY"; fi; \
+	uv run uvicorn campus_multiplataforma_llm_api.main:app --host 0.0.0.0 --port 8000 --reload
+
 analyse:
 	uv run python src/llm_analyser/analyser.py
 
-.PHONY: up down logs ps build bash migrate run app streamlit analyse
+.PHONY: up down logs ps build bash migrate run app streamlit analyse api
