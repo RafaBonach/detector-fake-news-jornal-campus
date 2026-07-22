@@ -10,6 +10,7 @@ venv/
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
 
 # Database file
 meridian.db
@@ -31,3 +32,6 @@ src/campus_multiplataforma_llm.egg-info/
 
 # streamlit secrets
 secrets.toml
+
+# Analizador de dependencias
+.ruff_cache/

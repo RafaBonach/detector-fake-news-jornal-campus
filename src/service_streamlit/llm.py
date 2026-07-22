@@ -1,74 +1,44 @@
-from service_streamlit.utils import set_base_prompt, update_prompt, get_api_key
-import config_base as config
+"""Compatibilidade com a camada Streamlit.
 
-from groq import Groq
+Este wrapper preserva a API existente enquanto delega a lógica para a
+camada pública reutilizável.
+"""
+
+from campus_multiplataforma_llm.chat_service import ChatService
+
+from service_streamlit.utils import get_api_key
 
 class LLMService:
-    def __init__(self, model_name):
+    """Ponte de compatibilidade entre Streamlit e a camada pública de chat."""
+
+    def __init__(self, model_name: str):
+        """Inicializa o serviço de UI com o modelo selecionado.
+
+        Args:
+            model_name: Nome do modelo escolhido pelo usuário na interface.
+
+        Raises:
+            ValueError: Quando a chave de API não está disponível nos segredos
+            do Streamlit.
+        """
+
         self.model_name = model_name
-        self.provider = None
-        self.prompt_template = set_base_prompt() # Prompt Base
-        self.api_key = None
+        self.__api_key__ = get_api_key()
+        self._chat_service = ChatService(model_name=model_name, api_key=self.__api_key__)
 
-        # self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-    
+    def answer_question(self, user_question, history=None, params=None):
+        """Encaminha a pergunta para a camada pública de chat.
+
+        Args:
+            user_question: Pergunta atual do usuário.
+            history: Histórico opcional de mensagens no formato de chat.
+            params: Parâmetros opcionais para a chamada ao provedor.
+
+        Returns:
+            str: Texto da resposta gerada pelo modelo.
+
+        Raises:
+            Exception: Repropaga exceções da chamada ao serviço de LLM.
         """
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            torch_dtype="auto",
-            device_map="auto",
-        )
-        """
-        
-        self.__models_available__ = []
-        self.__providers_available__ = {prov: None for prov in config.MODELS.keys()}
-    
-    def call_groq(self, prompt, seed=None):
-        groq_client = Groq(api_key=self.api_key)
 
-        response = groq_client.chat.completions.create(
-            model=self.model_name,
-            messages=prompt,
-            seed=seed,
-        )
-
-        return response.choices[0].message.content.strip()
-
-    def __select_provider__(self):
-        provider = ""
-        for provider, models in config.MODELS.items():
-            if self.model_name in models:
-                self.provider = provider
-                break
-
-    def __call__(self, prompt):
-        if self.provider is None:
-            self.__select_provider__()
-
-        # debug
-        print(f"\n\n\nModelo {self.model_name} selecionado utilizando o provedor {self.provider}.\n\n\n")
-        
-        self.api_key = get_api_key(self.provider)
-
-        # debug
-        if self.api_key is None:
-            print(f"\n\n\n⚠️ Atenção: Nenhuma chave de API encontrada para o provedor {self.provider}. Verifique as variáveis de ambiente.\n\n\n")
-        else:
-            print(f"\n\n\nUma chave de API foi encontrada para o provedor {self.provider}.\n\n\n")
-
-        if self.provider == "groq":
-            return self.call_groq(prompt)
-        else:
-            raise ValueError(f"Modelo {self.model_name} não associado a nenhum provedor conhecido.")
-
-
-    def answer_question(self, user_question):
-        prompt = update_prompt(self.prompt_template, user_question)
-
-        answer = self.__call__(prompt)
-
-        if not answer:
-            print("Nenhuma resposta encontrada para a pergunta.")
-            return "Desculpe, não consegui encontrar uma resposta para sua pergunta."
-        
-        return answer
+        return self._chat_service.answer_question(user_question, history=history, params=params)
