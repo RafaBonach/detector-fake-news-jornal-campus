@@ -11,11 +11,10 @@ Attributes:
 
 # Modelos disponíveis por provedor.
 MODELS = [
-    "groq/compound",
-    "groq/compound-mini",
     "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
     "openai/gpt-oss-safeguard-20b",
+    "qwen/qwen3.6-27b"
 ]
 
 # Metadados e limites estimados de cada modelo.

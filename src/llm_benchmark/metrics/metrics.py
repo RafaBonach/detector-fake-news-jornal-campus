@@ -1,4 +1,4 @@
-from sklearn.metrics import precision_score, recall_score, f1_score # Métricas de avaliação
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score # Métricas de avaliação
 import pandas as pd
 class Metrics:
     def __init__(self, results: pd.DataFrame):
@@ -15,3 +15,7 @@ class Metrics:
     def calculate_f1_score(self):
         """Calcula o F1-score do modelo."""
         return f1_score(self.results['Resposta'].values, self.results['Previsao'].values)
+
+    def calculate_accuracy(self):
+        """Calcula a acurácia do modelo."""
+        return accuracy_score(self.results['Resposta'].values, self.results['Previsao'].values)

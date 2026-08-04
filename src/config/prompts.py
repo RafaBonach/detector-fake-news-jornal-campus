@@ -13,11 +13,11 @@ limitante = f"Você receberá exatamente {n_noticias} notícias. Sua resposta DE
 instrucao_base = "Você é um classificador binário de desinformação. Classifique CADA notícia a seguinte "
 
 benchmark_base = """
-Você é um classificador binário de desinformação. Classifique CADA notícia a seguinte como verdadeira (1) ou falsa (0).\n
+Você é um classificador binário de desinformação. Classifique a notícia a seguinte como verdadeira (1) ou falsa (0).\n
+O texto a seguir foi pré-processado antes de ser enviado ao modelo. Todos os verbos foram convertidos para o infinitivo, substantivos para sua forma canônica, stopwords foram removidas e a ordem geral das palavras foi preservada. O texto pode parecer gramaticalmente incorreto, mas representa o conteúdo de uma notícia. Não considere esses fatores como evidência de falsidade. Concentre-se apenas no conteúdo semântico da notícia.\n
 Responda SOMENTE com um objeto JSON válido, sem texto adicional, sem markdown, sem explicações.\n
 Formato obrigatório:\n
-{'classifications': [<int>, <int>, ...]}\n
-A lista deve ter exatamente o mesmo número de elementos que as notícias fornecidas, na mesma ordem.\n\n
+{'classifications': <int>}\n\n
 """
 
 BASE = {
@@ -31,8 +31,8 @@ BASE = {
         "3) Se não tiver confiança em um detalhe, diga explicitamente: 'Não tenho evidência suficiente para esse detalhe'.\n"
         "4) Não use linguagem especulativa.",
 
-    "zero-shot": benchmark_base + limitante,
-    "few-shot": benchmark_base + limitante + """\n\n
+    "zero-shot": benchmark_base,
+    "few-shot": benchmark_base + """\n\n
 
         Tenha base as seguintes definições de notícias falsas e verdadeiras para classificar as notícias fornecidas:\n\n
 
@@ -65,65 +65,18 @@ BASE = {
         Exemplo 4: Mensagem: O deputado celso jacob, que foi flagrado com biscoito de queijo dentro da cueca, retornar ao presidio. O episodio aconteceu no ultimo domingo quando voltava para a papuda apos o saidão do fim semana em tres rios. O deputado foi preso por falsificacao de documento publico. Após a dispensa, deputado federal celso jacob foi flagrado com dois pacotes de biscoito de queijo provolone escondidos dentro da cueca. Após o ocorrido, o deputado retornar ao centro de detencao provisoria da papuda do distrito federal, apos a saida de final de semana, autorizada pela justica. o episodio aconteceu no ultimo domingo segundo dados da subsecretaria de sistema penitenciario sesipe, ligada secretaria seguranca publica. Houve irregularidade identificada durante processo de revista. Por conta disso, o parlamentar foi levado ao setor de isolamento onde ficara sete dias. A vara de execucoes penais do tribunal de justica do distrito federal e territorios, tjdft, ja foi comunicada do fato e tambem foi aberto inquerito disciplinar para apurar caso de punicao. O casos pode chegar a 30 dias de isolamento, alem da perda do beneficios. A vep informa em nota "a subsecretaria ressaltou que e proibida a entrada, pelos internos, de qualquer objeto ou alimento no presidio sem autorizacao. A entrada de alimentos so possivel por meio da familia durante o periodo de visita". assessoria de celso jacob disse que ele levou alimentos para atender recomendacoes medicas de se alimentar a cada tres horas. jacob foi preso no inicio junho no aeroporto de brasilia, sob regime semiaberto determinada pela primeira turma do supremo tribunal federal por falsificacao de documento publico de dispensa de licitacao. o peemedebista, prefeito de tres rios do sul, rj, governou a cidade por dois mandatos. no fim de junho, o juiz valter andre bueno araujo da vara de execucoes penais do distrito federal autorizou ao deputado deixar presidio durante dia para trabalhar como parlamentar na camara dos deputados.
         Resposta: {'classifications': [1]}\n\n
         """,
-    "gpk": benchmark_base + limitante + """\n\n
-        Tenha base as seguintes definições de notícias falsas e verdadeiras para classificar as notícias fornecidas:\n\n
+    "CoT": benchmark_base + """\n\n
+        Raciocine internamente considerando:\n\n
 
-        Notícias Falsas (fake news): De acordo com Tandoc et al. (2018), notícias falsas 
-        referem-se a conteúdo criado e disseminado deliberadamente com a intenção de enganar o público, 
-        frequentemente para obter ganhos financeiros, políticos ou de outra natureza. 
-        Esses artigos imitam notícias reais em formato, mas não têm qualquer compromisso com a precisão factual. 
-        Ao contrário de outras formas de desinformação, como boatos ou sátiras, as notícias falsas 
-        são elaboradas para parecerem credíveis, enquanto enganam o público propositalmente.\n\n
+        - coerência textual;\n
+        - consistência dos acontecimentos;\n
+        - plausibilidade dos fatos;\n
+        - tom da linguagem;\n
+        - presença de sensacionalismo;\n
+        - presença de discurso conspiratório;\n
+        - objetividade;\n
+        - presença de dados verificáveis;\n
+        - possíveis sinais típicos de desinformação.\n\n
         
-        Notícias Verdadeiras (true news): Notícias verdadeiras, conforme definido por Kovach e Rosenstiel (2001), 
-        seguem princípios jornalísticos fundamentais, baseando-se em rigorosa verificação de fatos, fontes verificáveis 
-        e transparência. O objetivo principal é informar o público com precisão e imparcialidade, 
-        com um forte compromisso com a verdade, evitando a manipulação ou distorção dos fatos.\n\n
-
-        Base de conhecimento:\n\n
-
-        Uma notícia falsa frequentemente apresenta uma ou mais das seguintes características:\n\n
-
-        - Alegações sem qualquer evidência verificável.\n
-        - Uso de dados verdadeiros apresentados fora de contexto.\n
-        - conteúdo gerado por inteligência artificial.\n
-        - Atribui declarações a especialistas inexistentes ou sem credenciais.\n
-        - Contradiz informações amplamente confirmadas por órgãos oficiais ou instituições científicas.\n
-        - Apresenta estatísticas sem indicar sua origem.\n
-        - Noticias importantes com pouca difusão na mídia ou ausência de cobertura por veículos de comunicação confiáveis.\n
-        - Noticas antigas sendo circuladas como recentes.\n
-        - Mistura fatos verdadeiros com informações falsas para aumentar sua credibilidade.\n
-        - Presença de expressões como 'a mídia não quer que você saiba', 'compartilhe antes que apaguem' ou 'verdade escondida'
-        - Ausencia da origem de um dado estatistico.
-
-        Uma notícia verdadeira geralmente:\n\n
-
-        - Cita fontes identificáveis.\n
-        - Apresenta informações consistentes com órgãos oficiais ou estudos científicos.\n
-        - Diferencia fatos de opiniões.\n
-        - Mantém linguagem objetiva.\n
-        - Possui dados verificáveis.\n
-        - Possui poucos ou nenhum erro gramatical ou de digitação.\n
-
-        Para a analise, compare as afirmações presentes em cada notícia com as informações da base de conhecimento.
-            Caso a notícia contradiga fatos estabelecidos na base de conhecimento, classifique-a como falsa (0).
-            Caso a notícia seja consistente com a base de conhecimento, classifique-a como verdadeira (1).
-            Caso existam pequenas diferenças de redação, concentre-se no significado das afirmações, e não na similaridade textual.
-            Não forneça justificativas nem explicações.\n\n
-
-        Alguns exemplos de notícias verdadeiras:
-        Mensagem: A vacina contra COVID-19 não altera o DNA humano.\n
-            Resposta: {'classifications': [1]}\n\n
-        
-        Mensagem: O Conselho Nacional de Política Energética elevou temporariamente o teor de etanol anidro na gasolina de 30% para 32%.\n
-        Resposta: {'classifications': [1]}\n\n
-
-        Alguns exemplos de notícias falsas:
-        Mensagem: Anuário diz que nº de homens mortos por mulheres é maior que o de mulheres mortas por homens\n
-        Resposta: {'classifications': [0]}\n\n
-
-        Mensagem: Lula quebrou o protocolo e ligou ​direto para Trump para desmascarar a farsa do clã Bolsonaro e ​expôs as ligações da direita com o Comando Vermelho\n
-        Resposta: {'classifications': [0]}\n\n
-        """
-
+        Só gere uma resposta após ter feito o raciocínio interno. NÃO mostre o raciocínio."""
 }
