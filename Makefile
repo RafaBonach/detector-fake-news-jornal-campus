@@ -39,6 +39,6 @@ api:
 	uv run uvicorn campus_multiplataforma_llm_api.main:app --host 0.0.0.0 --port 8000 --reload
 
 analyse:
-	uv run python src/llm_analyser/analyser.py
+	uv run python src/llm_benchmark/main.py
 
 .PHONY: up down logs ps build bash migrate run app streamlit analyse api

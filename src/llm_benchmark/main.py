@@ -1,5 +1,6 @@
 """ --------------- Ainda falta calcular as métricas ---------------- """
 import re
+import time
 import pandas as pd
 from llm_benchmark.datasets.loader import DatasetLoader
 from llm_benchmark.datasets.processor import Processor
@@ -11,6 +12,8 @@ from llm_benchmark.metrics.metrics import Metrics
 
 PREVISAO_COLUMN = "Classe"
 
+START_INDEX =57
+
 def __exception_handler__(exception: Exception) -> float | Exception:
         """Essa função vai tratar os erros do groq
         - 429 (rate_limit): retorna o tempo de espera
@@ -18,21 +21,25 @@ def __exception_handler__(exception: Exception) -> float | Exception:
         - outros erros: retorna a mensagem de erro"""
         
         status_code = getattr(exception, "status_code", None)
-        error_message = str(exception)
+        error_message = str(exception).lower()
 
         wait_time = float(60)
 
-        if status_code == 429:
-            match = re.search(r"Please try again in \s+(\d+)\s*s", error_message, re.IGNORECASE)
+        if status_code == 429 or "rate limit" in error_message or "429" in error_message:
+            print(f"Erro 429: {exception}. Aguardando {wait_time} segundos antes de tentar novamente...")
+            match = re.search(r"please try again in \s+(\d+)\s*s", error_message, re.IGNORECASE)
             if match:
                 wait_time = float(match.group(1))
                 return wait_time
+            else:
+                return wait_time
             
         elif status_code == 400 and "json_validate_failed" in error_message:
+            print(f"Erro 400: {error_message}. Aguardando {wait_time} segundos antes de tentar novamente...")
             return wait_time
         
-        else:
-            return exception
+        print(f"Erro inesperado: {error_message}.")
+        raise exception
 
 def __save_metrics__(metrics: tuple[float, float, float], dataset_name: str) -> None:
     """Salva as métricas em um arquivo CSV"""
@@ -65,39 +72,59 @@ def benchmark(params: dict = None) -> str:
     df_processed = Processor(df.get_dataframe(), params["df_text_column"], PREVISAO_COLUMN)
     df_processed = df_processed.extract()
 
-    #2. Converte o dataframe em prompt.
-    print(f"Processando o dataframe com {len(df_processed)} linhas.\n")
-    prompt_builder = PromptBuilder(params["base_prompt_name"])
-    
-    prompt_builder.add_prompts(df_processed[params["df_text_column"]].tolist())
+    for ind in range(START_INDEX, len(df_processed)):
 
-    prompt = prompt_builder.get_prompt()
+        prompt = df_processed.iloc[ind][params["df_text_column"]]
 
-    #2.1. Verifica se o prompt excede o limite de tokens estimado
-    estimated_tokens = token_counter(prompt)
-    print(f"Prompt estimado em {estimated_tokens} tokens.")
-    
-    '''
-    if estimated_tokens > params["max_completion_tokens"]:
-        raise ValueError(f"O prompt excede o limite de tokens estimado: {estimated_tokens} > {params['max_completion_tokens']}.")
-    '''
-    #3. Envia o prompt para o modelo
-    groq_client = GroqClient(params["model_name"])
-    response = groq_client.chat_groq(prompt, params)
-    
-    #4. Tratar a resposta do modelo
-    result_handler = ResultHandler()
-    if not isinstance(response, Exception):
-        prevision = {index: row[PREVISAO_COLUMN] for index, row in df_processed.iterrows()}
-        results = result_handler.process_results(prevision, response)
+        print(f"\n\nExecução numero {ind + 1}/{len(df_processed)}\n")
+        #2. Converte o dataframe em prompt.
+        print(f"Processando o dataframe com {len(df_processed)} linhas.\n")
+        prompt_builder = PromptBuilder(params["base_prompt_name"])
 
-        #5. Salvar resultados em um arquivo CSV
-        storage = Store(f"{params['database_name'].rsplit('_', 1)[0]}_results")
-        storage.save_results(results)
-    else:
-        raise response
 
-    return "Benchmark executado com sucesso!"
+        # debug
+        print(f"Pegunta:\n{prompt}\n\n")
+
+
+        prompt_builder.add_prompts([prompt])
+
+        prompt = prompt_builder.get_prompt()
+
+        '''
+        #2.1. Verifica se o prompt excede o limite de tokens estimado
+        estimated_tokens = token_counter(prompt)
+        print(f"Prompt estimado em {estimated_tokens} tokens.")
+        
+        
+        if estimated_tokens > params["max_completion_tokens"]:
+            raise ValueError(f"O prompt excede o limite de tokens estimado: {estimated_tokens} > {params['max_completion_tokens']}.")
+        '''
+
+        # debug
+        #print(f"\n\nPrompt enviado para o modelo:\n{prompt}\n\n")
+
+        #3. Envia o prompt para o modelo
+        groq_client = GroqClient(params["model_name"])
+        response = groq_client.chat_groq(prompt, params)
+
+        # Debug
+        print(f"Resposta do modelo:\n{response}\n\n")
+        
+        
+        #4. Tratar a resposta do modelo
+        result_handler = ResultHandler()
+        if not isinstance(response, Exception):
+            prevision = df_processed.loc[ind, PREVISAO_COLUMN]
+            results = result_handler.process_results(ind, prevision, response)
+
+            if results is None:
+                raise ValueError("A LLM não deu um resultado ou não possui previsão para o resultado retornado, resposta Nula.")
+
+            #5. Salvar resultados em um arquivo CSV
+            storage = Store(f"{params['database_name'].rsplit('_', 1)[0]}_results")
+            storage.save_results(results)
+        else:
+            raise response
 
 def metrics(dataset_name: str = None):
     """Função para calcular métricas de avaliação do modelo."""
@@ -145,17 +172,18 @@ if __name__ == "__main__":
     * Zero-shot - fakerecogna - meta-llama concluido.
 
     """
-    
     params = {
-        "model_name": "groq/compound",
-        "base_prompt_name": "GKP",
+        "model_name": "qwen/qwen3.6-27b",
+        "base_prompt_name": "few-shot",
         "df_text_column": "Noticia",
         "top_p": 1,
-        "max_completion_tokens": 8192
+        "max_completion_tokens": 4000
     }
-    '''
-    #params["database_name"] = "FakeRecogna_2.csv"
+    
+    params["database_name"] = "amostra_FakeRecogna_anomaly.csv"
 
+    benchmark(params)
+    '''
     for i in range(1, 10):
         params["database_name"] = f"FakeRecogna_{i}.csv"
 
@@ -194,10 +222,8 @@ if __name__ == "__main__":
             break
 
     print(f"Benchmark concluído com sucesso! {i} chunks processados.\n")
-
-    
     '''
+    
     # Calcular as métricas
     """ --------------- Ainda falta calcular as métricas ---------------- """
-    metrics("FakeRecogna_results")
-    
+    metrics("amostra_FakeRecogna_results")

@@ -1,25 +1,16 @@
 import pandas as pd
 import re
 class ResultHandler:
-    def process_results(self, prevision: dict[int, int], llm_answer: str) -> pd.DataFrame:
+    def process_results(self, index: int, prevision: int, llm_answer: str) -> pd.DataFrame | None:
         """Essa função vai processar os resultados do modelo
         para indice do dataframe, retorna uma tupla com (previsão, resposta)"""
         # Extrai os números da resposta do modelo
         llm_answer_numbers = re.findall(r"\b[01]\b", llm_answer)
 
-        # Cria um dicionário para armazenar os resultados
         results = {}
+        results[index] = (prevision, llm_answer_numbers[0] if llm_answer_numbers and prevision is not None else None)
 
-        # Itera sobre as previsões e respostas do modelo
-        for index, prediction in prevision.items():
-            # Verifica se o índice está dentro do intervalo da resposta do modelo
-            if index < len(llm_answer_numbers):
-                llm_response = llm_answer_numbers[index]
-                results[index] = (prediction, llm_response)
-            else:
-                results[index] = (prediction, None)  # Caso não haja resposta do modelo
-
-        return pd.DataFrame.from_dict(results, orient="index", columns=["Resposta", "Previsao"])
+        return pd.DataFrame.from_dict(results, orient="index", columns=["Resposta", "Previsao"]) if len(results) > 0 else None
     
 if __name__ == "__main__":
     # Exemplo de uso da classe ResultHandler
