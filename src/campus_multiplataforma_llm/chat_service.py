@@ -4,11 +4,15 @@ Este módulo concentra a lógica reutilizável para consumo por outros projetos.
 """
 
 from dataclasses import dataclass
+import re
 
 from groq import Groq
 
 from config.prompts import BASE as PROMPTS_BASE
 from config.settings import MODELS as MODELS_LIST
+
+
+THINK_BLOCK_PATTERN = re.compile(r"<think>.*?</\\think>|<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
 
 @dataclass(slots=True)
@@ -75,6 +79,13 @@ def append_user_message(base_prompt: list[dict[str, str]], question: str) -> lis
     return updated_prompt
 
 
+def strip_think_blocks(content: str) -> str:
+    """Remove blocos de raciocínio interno da resposta do modelo."""
+
+    sanitized_content = THINK_BLOCK_PATTERN.sub("", content)
+    return sanitized_content.strip()
+
+
 class ChatService:
     """Serviço reutilizável para gerar respostas via Groq.
 
@@ -127,7 +138,9 @@ class ChatService:
                 top_p=params.get("top_p") if params and "top_p" in params else 1,
                 max_completion_tokens=params.get("max_completion_tokens") if params and "max_completion_tokens" in params else 4700,
             )
-            return response.choices[0].message.content.strip()
+            answer = strip_think_blocks(response.choices[0].message.content or "")
+
+            return answer
         except Exception as exc:
             print(f"Erro ao enviar mensagem para o Groq: {exc}")
             raise exc
